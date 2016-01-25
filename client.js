@@ -99,26 +99,6 @@ switch( process.argv[2] ) {
                 });
             }).end();
         break;
-    case "test" :
-
-        var req = http.get( "http://localhost:3000/fhir/Communication/"+process.argv[3], function( res ) {
-                console.log("STATUS: " + res.statusCode);
-                console.log("HEADERS: " + JSON.stringify(res.headers));
-                var body = '';
-                res.on('data', function (chunk) {
-                    body += chunk;
-                });
-                res.on('end', function() {
-                    //var data = JSON.parse(body);
-                    console.log("got: ");
-                    console.log(body);
-                });
-                res.on('error', function(e) {
-                    console.log("error: " +e.message);
-                });
-         });
-
-        break;
     case "vread" :
         var type = "json";
         if ( process.argv.length == 6 ) {
