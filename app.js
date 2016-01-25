@@ -53,7 +53,7 @@ MongoClient.connect(uri, function( err, database ) {
     console.log("Listening on port 3000");
 });
 
-app.get("/Communication/:fhir_id", function( req, res ) {
+app.get("/fhir/Communication/:fhir_id", function( req, res ) {
 
     getCommunication( req.params.fhir_id, function( err, doc ) {
         if ( err ) {
@@ -78,7 +78,7 @@ app.get("/Communication/:fhir_id", function( req, res ) {
     });
 });
 
-app.get("/Communication/:fhir_id/_history/:vid", function( req, res ) {
+app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
 
     getCommunication( req.params.fhir_id, req.params.vid, function ( err, doc ) {
         if ( err ) {
@@ -104,7 +104,7 @@ app.get("/Communication/:fhir_id/_history/:vid", function( req, res ) {
 });
 
 
-app.post("/Communication", function( req, res ) {
+app.post("/fhir/Communication", function( req, res ) {
     var comm = db.collection("Communication");
     var contentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     if ( req.headers['if-none-exist'] ) {
@@ -137,7 +137,7 @@ app.post("/Communication", function( req, res ) {
     }
 });
 
-app.put("/Communication/:fhir_id", function( req, res ) {
+app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var comm = db.collection("Communication");
     var contentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     if ( contentType == "application/xml+fhir" ) {
@@ -168,20 +168,20 @@ app.put("/Communication/:fhir_id", function( req, res ) {
     }
 });
 
-app.get("/Communication", function( req, res ) {
+app.get("/fhir/Communication", function( req, res ) {
     console.log(req.query);
     searchCommunication(req.query, null, req, res);
     res.end();
 });
 
-app.post("/Communication/_search", function( req, res ) {
+app.post("/fhir/Communication/_search", function( req, res ) {
     console.log(req.query);
     console.log(req.body);
     searchCommunication(req.query, req.body, req, res);
     res.end();
 });
 
-app.post('/Communication/\\$sent', function( req, res ) {
+app.post('/fhir/Communication/\\$sent', function( req, res ) {
     console.log("GOT Sent");
     console.log(req.body);
     processPlugins( 'sent', req.body );
@@ -189,7 +189,7 @@ app.post('/Communication/\\$sent', function( req, res ) {
     res.write("OK");
     res.end();
 });
-app.post('/Communication/\\$response', function( req, res ) {
+app.post('/fhir/Communication/\\$response', function( req, res ) {
     console.log("GOT Response");
     console.log(req.body);
     processPlugins( 'response', req.body );

@@ -9,7 +9,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication',
+            path : '/fhir/Communication',
             headers : {
                 'Content-Type': content_type
             },
@@ -41,7 +41,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication/'+process.argv[3],
+            path : '/fhir/Communication/'+process.argv[3],
             headers : {
                 'Content-Type': content_type,
                 'If-Match': process.argv[4]
@@ -81,7 +81,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication/'+process.argv[3]+format,
+            path : '/fhir/Communication/'+process.argv[3]+format,
             method : 'GET' }, function( res ) {
                 console.log("STATUS: " + res.statusCode);
                 console.log("HEADERS: " + JSON.stringify(res.headers));
@@ -99,6 +99,26 @@ switch( process.argv[2] ) {
                 });
             }).end();
         break;
+    case "test" :
+
+        var req = http.get( "http://localhost:3000/fhir/Communication/"+process.argv[3], function( res ) {
+                console.log("STATUS: " + res.statusCode);
+                console.log("HEADERS: " + JSON.stringify(res.headers));
+                var body = '';
+                res.on('data', function (chunk) {
+                    body += chunk;
+                });
+                res.on('end', function() {
+                    //var data = JSON.parse(body);
+                    console.log("got: ");
+                    console.log(body);
+                });
+                res.on('error', function(e) {
+                    console.log("error: " +e.message);
+                });
+         });
+
+        break;
     case "vread" :
         var type = "json";
         if ( process.argv.length == 6 ) {
@@ -111,7 +131,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication/'+process.argv[3]+'/_history/'+process.argv[4]+format,
+            path : '/fhir/Communication/'+process.argv[3]+'/_history/'+process.argv[4]+format,
             method : 'GET' }, function( res ) {
                 console.log("STATUS: " + res.statusCode);
                 console.log("HEADERS: " + JSON.stringify(res.headers));
@@ -142,7 +162,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication'+query+format,
+            path : '/fhir/Communication'+query+format,
             method : 'GET' }, function( res ) {
                 console.log("STATUS: " + res.statusCode);
                 console.log("HEADERS: " + JSON.stringify(res.headers));
@@ -173,7 +193,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication/_search'+query+format,
+            path : '/fhir/Communication/_search'+query+format,
             headers : {
                 'Content-Type': "application/x-www-form-urlencoded"
             },
@@ -202,7 +222,7 @@ switch( process.argv[2] ) {
         var req = http.request( {
             hostname : 'localhost',
             port : 3000,
-            path : '/Communication/$sent',
+            path : '/fhir/Communication/$sent',
             headers : {
                 'Content-Type': "application/x-www-form-urlencoded"
             },
