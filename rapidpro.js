@@ -42,13 +42,7 @@ exports.process = function( type, nconf, db, mongo, resource, callback ) {
 };
 
 function sendMessage( nconf, db, resource, callback ) {
-    var rp_map = db.collection("contact_communication");
 
-    var phone = [];
-    for( i in resource.recipient ) {
-        console.log("Adding "+resource.recipient[i].reference);
-        phone.push( nconf.get("rapidpro:testing") ); // Temporary placeholder
-    }
     var msg;
     for( i in resource.payload ) {
         if ( resource.payload[i].contentString ) {
@@ -58,15 +52,77 @@ function sendMessage( nconf, db, resource, callback ) {
     console.log("Payload is "+msg);
     if ( !msg ) {
         console.log("Unable to decipher message from "+resource.id);
-    }
+    } else {
 
+        for( i in resource.recipient ) {
+            if ( resource.recipient[i].contained ) {
+                var ref = resource.recipient[i].contained;
+                runRapidPro(ref, msg, nconf, db, resource, callback);
+            } else if ( resource.recipient[i].reference ) {
+                console.log("looking for "+resource.recipient[i].reference);
+                if ( /^[A-Za-z]+\/\w+/.test( resource.recipient[i].reference ) ) {
+                    // No local lookup options, so just send through for testing...
+                    runRapidPro({}, msg, nconf, db, resource, callback);
+                } else {
+                    var req = http.get(resource.recipient[i].reference, function (res) {
+                        var body = '';
+                        res.on('data', function(chunk) {
+                            body += chunk;
+                        });
+                        res.on('end', function() {
+                            if ( res.headers['content-type'] == 'application/fhir+json' ) {
+                                var ref = JSON.parse(body);
+                                runRapidPro(ref, msg, nconf, db, resource, callback);
+                            } else if ( res.headers['content-type'] == 'application/fhir+xml' ) {
+                                fhir.XmlToObject(body).then( function ( ref ) {
+                                    runRapidPro(ref, msg, nconf, db, resource, callback);
+                                });
+                            } else {
+                                console.log("Invalid content type for "+resource.recipient[i].reference);
+                            }
+                        });
+                        res.on('error', function(e) {
+                            console.log("Error trying to access "+resource.recipient[i].reference);
+                            console.log(e);
+                        });
+                    });
+                }
+            }
+        }
+
+    }
+   
+}
+
+function runRapidPro( recipient, msg, nconf, db, resource, callback ) {
+    var rp_map = db.collection("contact_communication");
+    var phone;
+    if ( recipient.telecom && Array.isArray( recipient.telecom ) && recipient.telecom.length > 0 ) {
+        for ( j in recipient.telecom ) {
+            if ( recipient.telecom[j].use && recipient.telecom[j].use == 'mobile' ) {
+                phone = recipient.telecom[j].value;
+                break;
+            }
+        }
+        if ( !phone ) {
+            // Default to first number if no mobile for now.
+            phone = recipient.telecom[0].value;
+        }
+    }
+    if ( !phone ) {
+        // Check for testing number if nothing is found.
+        phone = nconf.get("rapidpro:testing");
+    }
+    if ( !phone ) {
+        return;
+    }
     var postdata = JSON.stringify({
         "flow_uuid": nconf.get("rapidpro:flow_uuid"),
         "extra" : {
             "msg" : msg,
             "id" : resource.id
         },
-        "phone" : phone
+        "phone" : [ phone ]
     });
     var req = http.request( {
         hostname : nconf.get("rapidpro:host"),
@@ -89,7 +145,7 @@ function sendMessage( nconf, db, resource, callback ) {
                     var details = JSON.parse( body );
                     for( i in details ) {
                         var detail = details[i];
-                        rp_map.insertOne( { "phone": phone[i], recipient : resource.recipient[i], contact: detail.contact, text: msg, time: detail.created_on, run: detail.run, id: resource.id }, function( err, r ) {
+                        rp_map.insertOne( { "phone": phone, recipient : resource.recipient[i], contact: detail.contact, text: msg, time: detail.created_on, run: detail.run, id: resource.id }, function( err, r ) {
                             if ( err ) {
                                 console.log("Failed to insert contact_communication");
                                 console.log(err);
@@ -112,7 +168,6 @@ function sendMessage( nconf, db, resource, callback ) {
         });
     req.write(postdata);
     req.end();
-    
 }
 
 function findResource( rp_event, db, callback ) {
