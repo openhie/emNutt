@@ -171,14 +171,12 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
 app.get("/fhir/Communication", function( req, res ) {
     console.log(req.query);
     searchCommunication(req.query, null, req, res);
-    res.end();
 });
 
 app.post("/fhir/Communication/_search", function( req, res ) {
     console.log(req.query);
     console.log(req.body);
     searchCommunication(req.query, req.body, req, res);
-    res.end();
 });
 
 app.post('/fhir/Communication/\\$sent', function( req, res ) {
@@ -392,19 +390,25 @@ function createCommunication( resource, response, request ) {
 }
 
 function searchCommunication( query, post, request, response ) {
-    var findArgs = {};
+    var find_args = {};
     if ( query ) {
         for( i in query ) {
-            findArgs[i] = parseSearch( i, query[i] );
+            var search = parseSearch( i, query[i] );
+            for ( j in search ) {
+                find_args[j] = search[j];
+            }
         }
     }
     if ( post ) {
         for( i in post ) {
-            findArgs[i] = parseSearch( i, query[i] );
+            var search = parseSearch( i, query[i] );
+            for ( j in search ) {
+                find_args[j] = search[j];
+            }
         }
     }
     console.log("search terms are:");
-    console.log(findArgs);
+    console.log(find_args);
 
     var comm = db.collection("Communication");
     var bundle = { resourceType : 'Bundle',
@@ -467,25 +471,26 @@ function parseSearch( key, value ) {
             return {"meta.tag" : parsePrefix( prefix, value ) };
             break;
         case 'category' :
-            return {category : parsePrefix( prefix, value ) };
+            return {"category.coding.code" : parsePrefix( prefix, value ) };
             break;
         case 'encounter' :
             return {encounter : parsePrefix( prefix, value ) };
             break;
         case 'identifier' :
-            return {identifier : parsePrefix( prefix, value ) };
+            return {"identifier.value" : parsePrefix( prefix, value ) };
             break;
         case 'priority' :
-            return {priority : parsePrefix( prefix, value ) };
+            return {"priority.coding.code" : parsePrefix( prefix, value ) };
             break;
         case 'characteristic' :
-            return {characteristic : parsePrefix( prefix, value ) };
+            return {"characteristic.coding.code" : parsePrefix( prefix, value ) };
             break;
         case 'period' :
-            return {period : parsePrefix( prefix, value ) };
-            break;
-        case 'priority' :
-            return {priority : parsePrefix( prefix, value ) };
+            if ( prefix == 'eq' ) {
+                return {"period.start" : parsePrefix( 'le', value ), "period.end" : parsePrefix( 'ge', value ) };
+            } else {
+                return {"period.start" : parsePrefix( prefix, value ) };
+            }
             break;
         case 'dissemination.timestamp' :
             return {"dissemination.timestamp" : parsePrefix( prefix, value ) };
