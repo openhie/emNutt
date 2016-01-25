@@ -49,6 +49,13 @@ function sendMessage( nconf, db, resource, callback ) {
             msg = resource.payload[i].contentString;
         }
     }
+    if ( !msg ) {
+        for( i in resource.payload ) {
+            if ( resource.payload[i].contentAttachment && resource.payload[i].contentAttachment.title ) {
+                msg = resource.payload[i].contentAttachment.title;
+            }
+    }
+    }
     console.log("Payload is "+msg);
     if ( !msg ) {
         console.log("Unable to decipher message from "+resource.id);
