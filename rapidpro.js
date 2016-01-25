@@ -1,0 +1,166 @@
+var http = require('http');
+
+exports.process = function( type, nconf, db, mongo, resource, callback ) {
+    if ( type == 'create' || type == 'update' ) {
+        if ( !resource.sent ) {
+            sendMessage( nconf, db, resource, callback );
+        } else {
+            console.log("Not sending because sent on " +resource.sent);
+            callback();
+        }
+    } else if ( type == 'sent' ) {
+        if ( resource.event ) {
+            if ( resource.event == 'mt_sent' || resource.event == 'mt_dlvd' ) {
+                findResource( resource, db, function ( communication, recipient ) {
+                    if ( communication ) {
+                        if ( communication.status != 'completed' ) {
+                            communication.status = 'in-progress';
+                        }
+                        if ( !communication.dissemination ) {
+                            communication.dissemination = [];
+                        }
+                        communication.dissemination.push( {status : 'in-progress', timestamp : new Date(), recipient: recipient } );
+                        callback( communication );
+                    }
+                });
+            }
+        }
+    } else if ( type == 'response' ) {
+        console.log("got response code");
+        findResourceByRun( resource.run, resource, db, function( communication, recipient ) {
+            if ( communication ) {
+                communication.status = 'completed';
+                if ( !communication.dissemination ) {
+                    communication.dissemination = [];
+                }
+                communication.dissemination.push( {status : 'completed', timestamp : new Date(), response : resource.text, recipient: recipient } );
+                callback( communication );
+            }
+        });
+
+    }
+};
+
+function sendMessage( nconf, db, resource, callback ) {
+    var rp_map = db.collection("contact_communication");
+
+    var phone = [];
+    for( i in resource.recipient ) {
+        console.log("Adding "+resource.recipient[i].reference);
+        phone.push( nconf.get("rapidpro:testing") ); // Temporary placeholder
+    }
+    var msg;
+    for( i in resource.payload ) {
+        if ( resource.payload[i].contentString ) {
+            msg = resource.payload[i].contentString;
+        }
+    }
+    console.log("Payload is "+msg);
+    if ( !msg ) {
+        console.log("Unable to decipher message from "+resource.id);
+    }
+
+    var postdata = JSON.stringify({
+        "flow_uuid": nconf.get("rapidpro:flow_uuid"),
+        "extra" : {
+            "msg" : msg,
+            "id" : resource.id
+        },
+        "phone" : phone
+    });
+    var req = http.request( {
+        hostname : nconf.get("rapidpro:host"),
+        port : nconf.get("rapidpro:port"),
+        path : "/api/v1/runs.json",
+        headers : {
+            'Content-Type': "application/json",
+            'Authorization' : nconf.get("rapidpro:token"),
+            'Content-Length' : postdata.length
+        },
+        method : 'POST' }, function( res ) {
+            console.log("RapidPro Status: " +res.statusCode );
+            var body = '';
+            res.on('data', function(chunk) {
+                body += chunk;
+            });
+            res.on('end', function() {
+                console.log("RapidPro response: "+body);
+                try {
+                    var details = JSON.parse( body );
+                    for( i in details ) {
+                        var detail = details[i];
+                        rp_map.insertOne( { "phone": phone[i], recipient : resource.recipient[i], contact: detail.contact, text: msg, time: detail.created_on, run: detail.run, id: resource.id }, function( err, r ) {
+                            if ( err ) {
+                                console.log("Failed to insert contact_communication");
+                                console.log(err);
+                                resource.status = 'failed';
+                            } else {
+                                resource.status = 'in-progress';
+                            }
+                        });
+                    }
+                } catch ( err ) {
+                    console.log("Failed to parse rapid pro response.");
+                    console.log(err);
+                    resource.status = 'failed';
+                }
+                callback( resource );
+            });
+            res.on('error', function(e) {
+                console.log("RapidPro error: " +e.message);
+            });
+        });
+    req.write(postdata);
+    req.end();
+    
+}
+
+function findResource( rp_event, db, callback ) {
+    var findArgs = { phone : rp_event.phone, text : rp_event.text };
+    var rp_map = db.collection("contact_communication");
+
+    rp_map.findOne( findArgs, { "id" : 1, "recipient" : 1 }, { sort : [['time','desc']] }, function( err, doc ) {
+        if ( err ) {
+            console.log("Failed to find resource for ");
+            console.log(findArgs);
+        } else {
+            var comm = db.collection("Communication");
+            comm.findOne( {id:doc.id}, function( err, communication ) {
+                if ( err ) {
+                    console.log("Failed to get resource for " +doc.id);
+                    console.log(err);
+                } else {
+                    callback( communication, doc.recipient );
+                }
+            });
+        }
+    });
+}
+function findResourceByRun( run, rp_event, db, callback ) {
+    var findArgs = { phone : rp_event.phone, run : parseInt(run) };
+    var rp_map = db.collection("contact_communication");
+    console.log("looking for ");
+    console.log(findArgs);
+
+    rp_map.findOne( findArgs, { "id" : 1, "recipient" : 1 }, { sort : [['time','desc']] }, function( err, doc ) {
+        if ( err ) {
+            console.log("Failed to find resource for ");
+            console.log(findArgs);
+        } else {
+            if ( !doc ) {
+                console.log("Failed to find contact_communication for:");
+                console.log(findArgs);
+            } else {
+                var comm = db.collection("Communication");
+                comm.findOne( {id:doc.id}, function( err, communication ) {
+                    if ( err ) {
+                        console.log("Failed to get resource for " +doc.id);
+                        console.log(err);
+                    } else {
+                        callback( communication, doc.recipient );
+                    }
+                });
+            }
+        }
+    });
+}
