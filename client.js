@@ -69,6 +69,38 @@ switch( process.argv[2] ) {
             req.end();
         });
         break;
+     case "put" :
+        var content_type = getContentType( process.argv[4] );
+        var req = http.request( {
+            hostname : 'localhost',
+            port : 3000,
+            path : '/fhir/Communication/'+process.argv[3],
+            headers : {
+                'Content-Type': content_type,
+            },
+            method : 'PUT' }, function( res ) {
+                console.log("STATUS: " + res.statusCode);
+                console.log("HEADERS: " + JSON.stringify(res.headers));
+                var body = '';
+                res.on('data', function (chunk) {
+                    body += chunk;
+                });
+                res.on('end', function() {
+                    console.log("got: " +body);
+                    //var data = JSON.parse(body);
+                    //console.log("got: ");
+                    //console.log(data);
+                });
+                res.on('error', function(e) {
+                    console.log("error: " +e.message);
+                });
+            });
+        fs.readFile(process.argv[4], function( err, postdata ) {
+            if ( err ) throw err;
+            req.write(postdata);
+            req.end();
+        });
+        break;
     case "read" :
         var type = "json";
         if ( process.argv.length == 5 ) {

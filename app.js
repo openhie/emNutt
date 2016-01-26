@@ -216,20 +216,14 @@ function getCommunication( fhir_id, version_id, callback ) {
         version_id = false;
     }
 
-    var search_id;
-    try {
-        search_id = new mongo.ObjectId(fhir_id);
-    } catch ( err ) {
-        return callback( "Error getting FHIR id." );
-    }
     var collection;
     var find_args;
 
     if (version_id) {
-        find_args = { id : search_id, "meta.versionId" : parseInt( version_id ) };
+        find_args = { id : fhir_id, "meta.versionId" : parseInt( version_id ) };
         collection = db.collection("history");
     } else {
-        find_args = { id : search_id };
+        find_args = { id : fhir_id };
         collection = db.collection("Communication");
     }
 
@@ -246,16 +240,10 @@ function getCommunication( fhir_id, version_id, callback ) {
 }
 
 function getVersion( fhir_id, callback ) {
-    var search_id;
-    try {
-        search_id = new mongo.ObjectId(fhir_id);
-    } catch ( err ) {
-        return callback( "Error getting FHIR id." );
-    }
 
     var comm = db.collection("Communication");
 
-    comm.findOne( { id : search_id }, { "meta.versionId" : 1 }, function( err, doc ) {
+    comm.findOne( { id : fhir_id }, { "meta.versionId" : 1 }, function( err, doc ) {
         if ( err ) {
             return callback( "Failed to find "+fhir_id );
         }
@@ -267,12 +255,10 @@ function getVersion( fhir_id, callback ) {
 function internalUpdate( resource ) {
     comm = db.collection("Communication");
 
-    var mongo_id = new mongo.ObjectId(resource.id);
-
     resource.meta.lastUpdated = new Date();
     resource.meta.versionId++;
 
-    comm.updateOne( { id: mongo_id }, { $set : resource }, function ( err, r ) {
+    comm.updateOne( { id: resource.id }, { $set : resource }, function ( err, r ) {
         if ( err ) {
             console.log("Failed to update "+resource.id);
             console.log(err);
@@ -288,43 +274,42 @@ function internalUpdate( resource ) {
 }
 
 function updateCommunication( fhir_id, resource, response, request ) {
+    /*
     if ( !request.headers['if-match'] ) {
         response.status(412);
         response.json({err:"If-Match header is missing and must be supplied)."});
         response.end();
     } else {
+    */
         getVersion( fhir_id, function ( err, data ) {
             console.log("get version found:");
             console.log(data);
-            if ( data.meta.versionId != request.headers['if-match'] ) {
-                response.status(409);
-                response.json({err:"Version id from If-Match headers doesn't match current version."});
-                response.end();
-            } else if ( resource.resourceType != "Communication" ) {
-                response.status(404);
-                response.json({err:"Invalid resourceType (not Communication)."});
-                response.end();
-            } else if ( resource.id != fhir_id ) {
-                response.status(400);
-                response.json({err:"ID doesn't match for update."});
-                response.end();
-            } else {
-                comm = db.collection("Communication");
-
-                var mongo_id = new mongo.ObjectId(fhir_id);
-                if ( !resource.meta ) {
-                    resource.meta = { lastUpdated : new Date(), version : data.meta.versionId+1 };
+            console.log(err);
+            if ( !data ) {
+                if ( resource.resourceType != "Communication" ) {
+                    response.status(404);
+                    response.json({err:"Invalid resourceType (not Communication)."});
+                    response.end();
+                } else if ( resource.id != fhir_id ) {
+                    response.status(400);
+                    response.json({err:"ID doesn't match for update."});
+                    response.end();
                 } else {
-                    resource.meta.lastUpdated = new Date();
-                    resource.meta.versionId = data.meta.versionId+1;
-                }
+                    comm = db.collection("Communication");
 
-                comm.updateOne( { id: mongo_id }, { $set : resource },
-                    function( err, r ) {
+                    if ( !resource.meta ) {
+                        resource.meta = { lastUpdated : new Date(), versionId : 1 };
+                    } else {
+                        resource.meta.lastUpdated = new Date();
+                        if ( !resource.meta.versionId ) {
+                            resource.meta.versionId = 1;
+                        }
+                    }
+                    comm.insertOne( resource, function ( err, r ) {
                         if ( err ) {
                             response.status(400);
                             response.end();
-                            console.log("Failed to update "+fhir_id+" database.");
+                            console.log("Failed to insert into database.");
                             console.log(err);
                         } else {
                             try {
@@ -334,15 +319,68 @@ function updateCommunication( fhir_id, resource, response, request ) {
                                 console.log(err);
                             }
                             response.status(201);
-                            response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/"+(data.meta.versionId+1) );
+                            response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/"+resource.meta.versionId );
                             response.end();
-                            processPlugins( 'update', resource );
+                            processPlugins( 'create', resource );
                             console.log("Saved " +resource.id+" to database.");
                         }
                     });
+                }
+
+            } else {
+                if ( !request.headers['if-match'] ) {
+                    response.status(412);
+                    response.json({err:"If-Match header is missing and must be supplied)."});
+                    response.end();
+                } else {
+                    if ( data.meta.versionId != request.headers['if-match'] ) {
+                        response.status(409);
+                        response.json({err:"Version id from If-Match headers doesn't match current version."});
+                        response.end();
+                    } else if ( resource.resourceType != "Communication" ) {
+                        response.status(404);
+                        response.json({err:"Invalid resourceType (not Communication)."});
+                        response.end();
+                    } else if ( resource.id != fhir_id ) {
+                        response.status(400);
+                        response.json({err:"ID doesn't match for update."});
+                        response.end();
+                    } else {
+                        comm = db.collection("Communication");
+
+                        if ( !resource.meta ) {
+                            resource.meta = { lastUpdated : new Date(), versionId : data.meta.versionId+1 };
+                        } else {
+                            resource.meta.lastUpdated = new Date();
+                            resource.meta.versionId = data.meta.versionId+1;
+                        }
+
+                        comm.updateOne( { id: fhir_id }, { $set : resource },
+                                function( err, r ) {
+                                    if ( err ) {
+                                        response.status(400);
+                                        response.end();
+                                        console.log("Failed to update "+fhir_id+" database.");
+                                        console.log(err);
+                                    } else {
+                                        try {
+                                            copyToHistory( resource.id );
+                                        } catch (err) {
+                                            console.log("Failed to save history.");
+                                            console.log(err);
+                                        }
+                                        response.status(201);
+                                        response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/"+(data.meta.versionId+1) );
+                                        response.end();
+                                        processPlugins( 'update', resource );
+                                        console.log("Saved " +resource.id+" to database.");
+                                    }
+                                });
+                    }
+                }
             }
         });
-    }
+    //}
 }
 
 function createCommunication( resource, response, request ) {
@@ -361,7 +399,7 @@ function createCommunication( resource, response, request ) {
             resource.meta.versionId = 1;
             resource.meta.lastUpdated = new Date();
         }
-        resource.id = new mongo.ObjectId();
+        resource.id = new mongo.ObjectId().toHexString();
 
         comm = db.collection("Communication");
 
@@ -453,7 +491,7 @@ function parseSearch( key, value ) {
 
     switch( key ) {
         case '_id' :
-            return {id : parsePrefix( prefix, new mongo.ObjectId( value ) ) };
+            return {id : parsePrefix( prefix, value ) };
             break;
         case '_lastUpdated' :
             return {"meta.lastUpdated" : parsePrefix( prefix, value ) };
