@@ -319,7 +319,7 @@ function updateCommunication( fhir_id, resource, response, request ) {
                                 console.log(err);
                             }
                             response.status(201);
-                            response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/"+resource.meta.versionId );
+                            response.location( "http://"+request.headers.host+"/fhir/Communication/"+resource.id+"/_history/"+resource.meta.versionId );
                             response.end();
                             processPlugins( 'create', resource );
                             console.log("Saved " +resource.id+" to database.");
@@ -370,7 +370,7 @@ function updateCommunication( fhir_id, resource, response, request ) {
                                             console.log(err);
                                         }
                                         response.status(201);
-                                        response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/"+(data.meta.versionId+1) );
+                                        response.location( "http://"+request.headers.host+"/fhir/Communication/"+resource.id+"/_history/"+(data.meta.versionId+1) );
                                         response.end();
                                         processPlugins( 'update', resource );
                                         console.log("Saved " +resource.id+" to database.");
@@ -417,7 +417,7 @@ function createCommunication( resource, response, request ) {
                     console.log(err);
                 }
                 response.status(201);
-                response.location( "http://"+request.headers.host+"/Communication/"+resource.id+"/_history/1" );
+                response.location( "http://"+request.headers.host+"/fhir/Communication/"+resource.id+"/_history/1" );
                 response.end();
                 processPlugins( 'create', resource );
                 console.log("Saved " +resource.id+" to database.");
