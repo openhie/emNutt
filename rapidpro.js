@@ -171,6 +171,8 @@ function runRapidPro( recipient, msg, nconf, db, resource, callback ) {
             });
             res.on('error', function(e) {
                 console.log("RapidPro error: " +e.message);
+                resource.status = 'failed';
+                callback( resource );
             });
         });
     req.write(postdata);
