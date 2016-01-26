@@ -202,8 +202,7 @@ function copyToHistory( fhir_id ) {
     comm = db.collection("Communication");
     history = db.collection("history");
 
-    comm.find({id:fhir_id}).forEach( function(doc) {
-        doc._id = new mongo.ObjectId();
+    comm.find({id:fhir_id}, {"_id":false}).forEach( function(doc) {
         history.insertOne(doc, function( err, r ) {
             if ( err ) throw err;
         });
@@ -227,7 +226,7 @@ function getCommunication( fhir_id, version_id, callback ) {
         collection = db.collection("Communication");
     }
 
-    collection.findOne( find_args, function( err, doc ) {
+    collection.findOne( find_args, {"_id":false}, function( err, doc ) {
         if ( err ) throw err;
         
         if ( !doc ) {
@@ -453,7 +452,7 @@ function searchCommunication( query, post, request, response ) {
         type : 'searchset',
         entry : []
     };
-    comm.find( find_args ).toArray( function( err, docs ) {
+    comm.find( find_args, {"_id" : false } ).toArray( function( err, docs ) {
         if ( err ) {
             response.status(400);
             response.end();
