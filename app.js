@@ -24,9 +24,10 @@ var app = express();
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 //app.use(logger('dev'));
+app.use(bodyParser.json( { type : "application/json" } ));
 app.use(bodyParser.json( { type : "application/json+fhir" } ));
+app.use(bodyParser.text( { type : "application/xml" } ));
 app.use(bodyParser.text( { type : "application/xml+fhir" } ));
-//app.use(bodyParser.text( { type : "application/xml" } ));
 app.use(bodyParser.urlencoded({ extended: false }));
 //app.use(cookieParser());
 //
@@ -66,7 +67,7 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
     
-            if ( req.query._format && req.query._format == "application/xml+fhir" ) {
+            if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
                 res.type("application/xml+fhir");
                 res.send( fhir.ObjectToXml(doc) );
             } else {
@@ -91,7 +92,7 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
     
-            if ( req.query._format && req.query._format == "application/xml+fhir" ) {
+            if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
                 res.type("application/xml+fhir");
                 res.send( fhir.ObjectToXml(doc) );
             } else {
@@ -112,7 +113,7 @@ app.post("/fhir/Communication", function( req, res ) {
         res.status(412);
         res.json({err:"Conditional create not supported."});
         res.end();
-    } else if ( contentType == "application/xml+fhir" ) {
+    } else if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
         if ( !fhir.ValidateXMLResource( req.body ) ) {
             res.status(400);
             res.json({err:"Invalid XML FHIR resource)."});
@@ -123,7 +124,7 @@ app.post("/fhir/Communication", function( req, res ) {
                 createCommunication( jsondata, res, req );
            });
         }
-    } else if ( contentType == "application/json+fhir" ) { 
+    } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
         if ( !fhir.ValidateJSResource( req.body ) ) {
             res.status(400);
             res.json({err:"Invalid JSON FHIR resource)."});
@@ -142,7 +143,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var comm = db.collection("Communication");
     var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     var contentType = origContentType.split(';')[0];
-    if ( contentType == "application/xml+fhir" ) {
+    if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
         if ( !fhir.ValidateXMLResource( req.body ) ) {
             res.status(400);
             res.json({err:"Invalid XML FHIR resource)."});
@@ -153,7 +154,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
                 updateCommunication( req.params.fhir_id, jsondata, res, req );
             });
         }
-    } else if ( contentType == "application/json+fhir" ) { 
+    } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
         if ( !fhir.ValidateJSResource( req.body ) ) {
             res.status(400);
             res.json({err:"Invalid JSON FHIR resource)."});
@@ -465,7 +466,7 @@ function searchCommunication( query, post, request, response ) {
                 } );
             }
             response.status(200);
-            if ( request.query._format && request.query._format == "application/xml+fhir" ) {
+            if ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) {
                 response.type("application/xml+fhir");
                 response.send( fhir.ObjectToXml(bundle) );
             } else {
