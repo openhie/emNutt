@@ -106,7 +106,8 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
 
 app.post("/fhir/Communication", function( req, res ) {
     var comm = db.collection("Communication");
-    var contentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
+    var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
+    var contentType = origContentType.split(';')[0];
     if ( req.headers['if-none-exist'] ) {
         res.status(412);
         res.json({err:"Conditional create not supported."});
@@ -132,14 +133,15 @@ app.post("/fhir/Communication", function( req, res ) {
         }
     } else {
         res.status(400);
-        res.json({err:"Invalid content type: "+contenType});
+        res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
         res.end();
     }
 });
 
 app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var comm = db.collection("Communication");
-    var contentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
+    var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
+    var contentType = origContentType.split(';')[0];
     if ( contentType == "application/xml+fhir" ) {
         if ( !fhir.ValidateXMLResource( req.body ) ) {
             res.status(400);
@@ -152,8 +154,6 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
             });
         }
     } else if ( contentType == "application/json+fhir" ) { 
-        console.log("looking at json");
-        console.log(req.body);
         if ( !fhir.ValidateJSResource( req.body ) ) {
             res.status(400);
             res.json({err:"Invalid JSON FHIR resource)."});
@@ -163,7 +163,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
         }
     } else {
         res.status(400);
-        res.json({err:"Invalid content type: "+contenType});
+        res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
         res.end();
     }
 });
