@@ -71,7 +71,9 @@ function retryFails() {
                 if ( !failedCache[docs[i].id] ) {
                     failedCache[docs[i].id] = 0;
                 }
-                if ( failedCache[docs[i].id]++ >= nconf.get("app:fail:retry") ) {
+
+
+                if ( failedCache[docs[i].id]++ < parseInt(nconf.get("app:fail:retry")) ) {
                     processPlugins( 'failed', docs[i] );
                 } else {
                     console.log("Setting "+docs[i].id+" to suspended because too many delivery fails.");
