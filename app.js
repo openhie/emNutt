@@ -6,9 +6,10 @@ var bodyParser = require('body-parser');
 var mongo = require('mongodb');
 var nconf = require("nconf");
 
-var FHIR = require("fhir");
-var fhir = new FHIR(FHIR.DSTU2);
+var spawn = require('child_process').spawn;
 
+var FHIR = require('fhir');
+var fhir = new FHIR(FHIR.DSTU2);
 
 nconf.defaults( { 
     "app:port" : 3000, 
@@ -68,14 +69,26 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                res.type("application/xml+fhir");
-                res.send( fhir.ObjectToXml(doc) );
+                convertFormat( 'json', JSON.stringify(doc), function( err, converted ) {
+                    if ( err ) {
+                        res.status(500);
+                        res.json({err:"Failed to convert to XML"});
+                        console.log("Failed to convert JSON to XML");
+                        console.log(err);
+                    } else {
+                        res.status(200);
+                        res.type("application/xml+fhir");
+                        res.send( converted );
+                    }
+                    res.end();
+                });
             } else {
+                res.status(200);
                 res.type("application/json+fhir");
                 res.json(doc);
+                res.end();
             }
         }
-        res.end();
     });
 });
 
@@ -93,14 +106,26 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                res.type("application/xml+fhir");
-                res.send( fhir.ObjectToXml(doc) );
+                convertFormat( 'json', JSON.stringify(doc), function( err, converted ) {
+                    if ( err ) {
+                        res.status(500);
+                        res.json({err:"Failed to convert to XML"});
+                        console.log("Failed to convert JSON to XML");
+                        console.log(err);
+                    } else {
+                        res.status(200);
+                        res.type("application/xml+fhir");
+                        res.send( converted );
+                    }
+                    res.end();
+                });
             } else {
+                res.status(200);
                 res.type("application/json+fhir");
                 res.json(doc);
+                res.end();
             }
         }
-        res.end();
     });
 });
 
@@ -120,9 +145,15 @@ app.post("/fhir/Communication", function( req, res ) {
             res.end();
             console.log("not valid should be 400");
         } else {
-            fhir.XmlToObject(req.body).then(function( jsondata ) {
-                createCommunication( jsondata, res, req );
-           });
+            convertFormat( 'xml', req.body, function( err, converted ) {
+                if ( err ) {
+                    res.status(500);
+                    res.json({err:"Failed to convert XML to JSON"});
+                    res.end();
+                } else {
+                    createCommunication( JSON.parse(converted), res, req );
+                }
+            });
         }
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
         if ( !fhir.ValidateJSResource( req.body ) ) {
@@ -150,8 +181,15 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
             res.end();
             console.log("not valid should be 400");
         } else {
-            fhir.XmlToObject(req.body).then(function( jsondata ) {
-                updateCommunication( req.params.fhir_id, jsondata, res, req );
+
+            convertFormat( 'xml', req.body, function( err, converted ) {
+                if ( err ) {
+                    res.status(500);
+                    res.json({err:"Failed to convert XML to JSON"});
+                    res.end();
+                } else {
+                    updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
+                }
             });
         }
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
@@ -588,4 +626,34 @@ function processPlugins( type, resource ) {
             }
         });
     }
+}
+
+
+function convertFormat( type, data, callback ) {
+
+    try {
+        var child = spawn('java', [ '-classpath', 
+                './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
+                'FhirXmlJson', type], { stdio: 'pipe' } );
+
+        child.stdin.write(data);
+        child.stdin.end();
+
+        child.stderr.on('data', function( chunk ) {
+            // Ignore the stderr for now because there is a lot of output.  Can display it if there is an issue to track down.
+        });
+
+        var resourceOutput = "";
+        child.stdout.on('data', function( chunk ) {
+            resourceOutput += chunk;
+        });
+
+        child.on('close', function( code ) {
+            //console.log("child exited with code "+code);
+            callback( null, resourceOutput );
+        });
+    } catch( err ) {
+        callback( err );
+    }
+
 }
