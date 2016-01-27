@@ -343,6 +343,12 @@ function updateCommunication( fhir_id, resource, response, request ) {
                             resource.meta.versionId = 1;
                         }
                     }
+                    if ( resource.sent ) {
+                        resource.sent = new Date( resource.sent );
+                    }
+                    if ( resource.received ) {
+                        resource.received = new Date( resource.received );
+                    }
                     comm.insertOne( resource, function ( err, r ) {
                         if ( err ) {
                             response.status(400);
@@ -392,6 +398,12 @@ function updateCommunication( fhir_id, resource, response, request ) {
                             resource.meta.lastUpdated = new Date();
                             resource.meta.versionId = data.meta.versionId+1;
                         }
+                        if ( resource.sent ) {
+                            resource.sent = new Date( resource.sent );
+                        }
+                        if ( resource.received ) {
+                            resource.received = new Date( resource.received );
+                        }
 
                         comm.updateOne( { id: fhir_id }, { $set : resource },
                                 function( err, r ) {
@@ -438,6 +450,12 @@ function createCommunication( resource, response, request ) {
             resource.meta.lastUpdated = new Date();
         }
         resource.id = new mongo.ObjectId().toHexString();
+        if ( resource.sent ) {
+            resource.sent = new Date( resource.sent );
+        }
+        if ( resource.received ) {
+            resource.received = new Date( resource.received );
+        }
 
         comm = db.collection("Communication");
 
@@ -483,8 +501,7 @@ function searchCommunication( query, post, request, response ) {
             }
         }
     }
-    console.log("search terms are:");
-    console.log(find_args);
+    console.log("search terms are:"+JSON.stringify(find_args,null,2));
 
     var comm = db.collection("Communication");
     var bundle = { resourceType : 'Bundle',
@@ -555,11 +572,31 @@ function parseSearch( key, value ) {
         case 'identifier' :
             return {"identifier.value" : parsePrefix( prefix, value ) };
             break;
+        case "subject" :
+            if ( prefix == 'eq' ) {
+                return parseReference( 'subject', value );
+            } else {
+                console.log("Don't know how to handle reference search other than eq for subject.");
+                return { subject : parsePrefix( prefix, value ) };
+            }
+        case "recipient" :
+            if ( prefix == 'eq' ) {
+                return parseReference( 'recipient', value );
+            } else {
+                console.log("Don't know how to handle reference search other than eq for recipient.");
+                return { subject : parsePrefix( prefix, value ) };
+            }
+        case "received" :
+            return { 'received' : parsePrefix( prefix, new Date(value) ) };
+        case "sent" :
+            return { 'sent' : parsePrefix( prefix, new Date(value) ) };
         case 'priority' :
-            return {"priority.coding.code" : parsePrefix( prefix, value ) };
+            //return {"priority.coding.code" : parsePrefix( prefix, value ) };
+            return { extension : { $elemMatch : { url : "Communication.priority", "valueCodeableConcept.coding.code" : parsePrefix( prefix, value ) } } };
             break;
         case 'characteristic' :
-            return {"characteristic.coding.code" : parsePrefix( prefix, value ) };
+            //return {"characteristic.coding.code" : parsePrefix( prefix, value ) };
+            return { extension : { $elemMatch : { url : "Communication.characteristic", "valueCodeableConcept.coding.code" : parsePrefix( prefix, value ) } } };
             break;
         case 'period' :
             if ( prefix == 'eq' ) {
@@ -569,19 +606,50 @@ function parseSearch( key, value ) {
             }
             break;
         case 'dissemination.timestamp' :
-            return {"dissemination.timestamp" : parsePrefix( prefix, value ) };
+            //return {"dissemination.timestamp" : parsePrefix( prefix, value ) };
+            return { extension : { $elemMatch : { url : "Communication.dissemination", extension : { $elemMatch : { url : "Communication.dissemination.timestamp", valueInstant : parsePrefix( prefix, value ) } } } } };
             break;
         case 'dissemination.code' :
-            return {"dissemination.code" : parsePrefix( prefix, value ) };
+            //return {"dissemination.code" : parsePrefix( prefix, value ) };
+            return { extension : { $elemMatch : { url : "Communication.dissemination", extension : { $elemMatch : { url : "Communication.dissemination.code", valueInstant : parsePrefix( prefix, value ) } } } } };
             break;
         case 'dissemination.location' :
-            return {"dissemination.location" : parsePrefix( prefix, value ) };
+            //return {"dissemination.location" : parsePrefix( prefix, value ) };
+            return { extension : { $elemMatch : { url : "Communication.dissemination", extension : { $elemMatch : { url : "Communication.dissemination.location", valueReference : parsePrefix( prefix, value ) } } } } };
             break;
         case 'dissemination.recipient' :
-            return {"dissemination.recipient.reference" : parsePrefix( prefix, value ) };
+            //return {"dissemination.recipient.reference" : parsePrefix( prefix, value ) };
+            if ( prefix == 'eq' ) {
+                var parsed = parseReference( "valueReference", value );
+                parsed[url] = "Communication.dissemination.recipient";
+                return { extension : { $elemMatch : { url : "Communication.dissemination", extension : { $elemMatch : parsed } } } };
+            } else {
+                console.log("Don't know how to handle reference search other than eq for dissemination.recipient");
+                return { extension : { $elemMatch : { url : "Communication.dissemination", extension : { $elemMatch : { url : "Communication.dissemination.recipient", valueReference : parsePrefix( prefix, value ) } } } } };
+            }
             break;
 
+
+            // { $or : [ { "recipient.reference" : { $regex : /Patient\/23$/ } }, { "recipient.contained.resourceType" : "Patient", "recipient.contained.id" : "23" }  ] }
+
     }
+}
+
+function parseReference( field, value ) {
+    var values = value.split('/');
+    var parsed = {};
+    if ( values.length == 2 ) {
+        var search_reg = values[0] + "\/" + values[1];
+        var first = {};
+        first[field+".reference"] = { $regex : search_reg };
+        var second = {};
+        second[field+".contained.resourceType"] = values[0];
+        second[field+".contained.id"] = values[1];
+        parsed['$or'] = [ first, second ];
+    } else {
+        parsed[field] = parsePrefix( 'eq', value );
+    }
+    return parsed;
 }
 
 function parsePrefix( prefix, value ) {
