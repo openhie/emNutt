@@ -46,13 +46,17 @@ exports.process = function( type, nconf, db, mongo, resource, callback ) {
         console.log("got response code");
         findResourceByRun( resource.run, resource, db, function( communication, recipient ) {
             if ( communication ) {
+                eventDate = new Date();
                 communication.status = 'completed';
+                if ( !communication.received ) {
+                    communication.received = eventDate;
+                }
                 if ( !communication.extension ) {
                     communication.extension = [];
                 }
                 communication.extension.push( { url : "Communication.dissemination", extension : [
                     { url : "Communication.dissemination.status", valueCodeableConcept : { coding : { code: "completed", system : "2.16.840.1.113883.4.642.1.79" } } },
-                    { url : "Communication.dissemination.timestamp", valueInstant : new Date() },
+                    { url : "Communication.dissemination.timestamp", valueInstant : eventDate },
                     { url : "Communication.dissemination.response", valueString : resource.text },
                     { url : "Communication.dissemination.recipient", valueReference : recipient },
                     ] } );
