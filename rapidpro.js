@@ -1,7 +1,7 @@
 var http = require('http');
 
 exports.process = function( type, nconf, db, mongo, resource, callback ) {
-    if ( type == 'create' || type == 'update' ) {
+    if ( type == 'create' || type == 'update' || type == 'failed' ) {
         if ( !resource.sent ) {
             sendMessage( nconf, db, resource, callback );
         } else {

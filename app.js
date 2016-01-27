@@ -12,6 +12,8 @@ nconf.defaults( {
     "app:port" : 3000, 
     "app:plugins" : [],
     "app:default_mime_type" : "application/json+fhir",
+    "app:fail:delay" : 600,
+    "app:fail:retry" : 5,
     "mongo:uri" : "mongodb://localhost/emNutt"
 } );
 
@@ -43,6 +45,9 @@ var port = nconf.get("app:port");
 var MongoClient = mongo.MongoClient;
 var db;
 
+var failedLoop;
+var failedCache = {};
+
 MongoClient.connect(uri, function( err, database ) {
     if ( err ) throw err;
     console.log("connecting to db");
@@ -50,7 +55,37 @@ MongoClient.connect(uri, function( err, database ) {
 
     app.listen(port);
     console.log("Listening on port 3000");
+
+    retryFails();
 });
+
+function retryFails() {
+
+    comm = db.collection("Communication");
+    
+    comm.find( { status : "failed" } ).toArray( function( err, docs ) {
+        if ( !err ) {
+            console.log("Rechecking "+docs.length+" failed documents.");
+            for( i in docs ) {
+
+                if ( !failedCache[docs[i].id] ) {
+                    failedCache[docs[i].id] = 0;
+                }
+                if ( failedCache[docs[i].id]++ >= nconf.get("app:fail:retry") ) {
+                    processPlugins( 'failed', docs[i] );
+                } else {
+                    console.log("Setting "+docs[i].id+" to suspended because too many delivery fails.");
+                    docs[i].status = "suspended";
+                    internalUpdate( docs[i] );
+                }
+
+            }
+        }
+        failedLoop = setTimeout( retryFails, nconf.get("app:fail:delay")*1000 );
+
+    });
+
+}
 
 app.get("/fhir/Communication/:fhir_id", function( req, res ) {
 
