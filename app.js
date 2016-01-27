@@ -8,9 +8,6 @@ var nconf = require("nconf");
 
 var spawn = require('child_process').spawn;
 
-var FHIR = require('fhir');
-var fhir = new FHIR(FHIR.DSTU2);
-
 nconf.defaults( { 
     "app:port" : 3000, 
     "app:plugins" : [],
