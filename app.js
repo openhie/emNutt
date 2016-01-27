@@ -139,30 +139,34 @@ app.post("/fhir/Communication", function( req, res ) {
         res.json({err:"Conditional create not supported."});
         res.end();
     } else if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        if ( !fhir.ValidateXMLResource( req.body ) ) {
-            res.status(400);
-            res.json({err:"Invalid XML FHIR resource)."});
-            res.end();
-            console.log("not valid should be 400");
-        } else {
-            convertFormat( 'xml', req.body, function( err, converted ) {
-                if ( err ) {
-                    res.status(500);
-                    res.json({err:"Failed to convert XML to JSON"});
-                    res.end();
-                } else {
-                    createCommunication( JSON.parse(converted), res, req );
-                }
-            });
-        }
+        validateFhir( 'xml', req.body, function( success ) {
+            if ( !success ) {
+                res.status(400);
+                res.json({err:"Invalid XML FHIR resource)."});
+                res.end();
+                console.log("not valid should be 400");
+            } else {
+                convertFormat( 'xml', req.body, function( err, converted ) {
+                    if ( err ) {
+                        res.status(500);
+                        res.json({err:"Failed to convert XML to JSON"});
+                        res.end();
+                    } else {
+                        createCommunication( JSON.parse(converted), res, req );
+                    }
+                });
+            }
+        });
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        if ( !fhir.ValidateJSResource( req.body ) ) {
-            res.status(400);
-            res.json({err:"Invalid JSON FHIR resource)."});
-            res.end();
-        } else {
-            createCommunication( req.body, res, req );
-        }
+        validateFhir( 'json', JSON.stringify( req.body ), function ( success ) {
+            if ( !success ) {
+                res.status(400);
+                res.json({err:"Invalid JSON FHIR resource)."});
+                res.end();
+            } else {
+                createCommunication( req.body, res, req );
+            }
+        });
     } else {
         res.status(400);
         res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
@@ -175,31 +179,35 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     var contentType = origContentType.split(';')[0];
     if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        if ( !fhir.ValidateXMLResource( req.body ) ) {
-            res.status(400);
-            res.json({err:"Invalid XML FHIR resource)."});
-            res.end();
-            console.log("not valid should be 400");
-        } else {
+        validateFhir( 'xml', req.body, function ( success ) {
+            if ( !success ) {
+                res.status(400);
+                res.json({err:"Invalid XML FHIR resource)."});
+                res.end();
+                console.log("not valid should be 400");
+            } else {
 
-            convertFormat( 'xml', req.body, function( err, converted ) {
-                if ( err ) {
-                    res.status(500);
-                    res.json({err:"Failed to convert XML to JSON"});
-                    res.end();
-                } else {
-                    updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
-                }
-            });
-        }
+                convertFormat( 'xml', req.body, function( err, converted ) {
+                    if ( err ) {
+                        res.status(500);
+                        res.json({err:"Failed to convert XML to JSON"});
+                        res.end();
+                    } else {
+                        updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
+                    }
+                });
+            }
+        });
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        if ( !fhir.ValidateJSResource( req.body ) ) {
-            res.status(400);
-            res.json({err:"Invalid JSON FHIR resource)."});
-            res.end();
-        } else {
-            updateCommunication( req.params.fhir_id, req.body, res, req );
-        }
+        validateFhir( 'json', JSON.stringify( req.body ), function( success ) {
+            if ( !success ) {
+                res.status(400);
+                res.json({err:"Invalid JSON FHIR resource)."});
+                res.end();
+            } else {
+                updateCommunication( req.params.fhir_id, req.body, res, req );
+            }
+        });
     } else {
         res.status(400);
         res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
@@ -706,12 +714,38 @@ function processPlugins( type, resource ) {
 }
 
 
+function validateFhir( type, data, callback ) {
+    try {
+        var child = spawn('java', [ '-classpath', 
+                './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
+                'FhirXmlJson', type], { stdio: 'pipe' } );
+
+        child.stdin.write(data);
+        child.stdin.end();
+
+        child.on('close', function( code ) {
+            //console.log("child exited with code "+code);
+            if ( code == 1 ) {
+                callback( false );
+            } else if ( code == 0 ) {
+                callback( true );
+            } else {
+                console.log( "Unknown exit code for validation/conversion: "+code);
+                callback( false );
+            }
+        });
+    } catch( err ) {
+        callback( err );
+    }
+
+}
+
 function convertFormat( type, data, callback ) {
 
     try {
         var child = spawn('java', [ '-classpath', 
                 './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
-                'FhirXmlJson', type], { stdio: 'pipe' } );
+                'FhirXmlJson', type, 1], { stdio: 'pipe' } );
 
         child.stdin.write(data);
         child.stdin.end();
@@ -727,7 +761,13 @@ function convertFormat( type, data, callback ) {
 
         child.on('close', function( code ) {
             //console.log("child exited with code "+code);
-            callback( null, resourceOutput );
+            if ( code == 1 ) {
+                callback( "Failed to validate." );
+            } else if ( code == 0 ) {
+                callback( null, resourceOutput );
+            } else {
+                callback( "Unknown exit code for validation/conversion: "+code);
+            }
         });
     } catch( err ) {
         callback( err );

@@ -8,6 +8,10 @@ import java.io.InputStreamReader;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.dstu2.resource.Communication;
 import ca.uhn.fhir.parser.IParser;
+import ca.uhn.fhir.parser.StrictErrorHandler;
+import ca.uhn.fhir.parser.DataFormatException;
+//import ca.uhn.fhir.validation.FhirValidator;
+//import ca.uhn.fhir.validation.ValidationResult;
 
 public class FhirXmlJson {
     public static void main(String[] theArgs) {
@@ -35,33 +39,64 @@ public class FhirXmlJson {
         */
         System.setOut(System.err);
         // Create a context
-        FhirContext ctx = FhirContext.forDstu2();
-
-        // Create a XML parser
-        IParser xmlParser = ctx.newXmlParser();
-        // Create a JSON parser
-        IParser jsonParser = ctx.newJsonParser();
-
-        String encode;
-        Communication comm;
         String start = "json";
 
         if ( theArgs.length >= 1 ) {
             start = theArgs[0];
         }
-        System.out.println("Start is "+start+" "+theArgs.length);
-        if ( start.equals( "xml" ) ) {
-            comm = xmlParser.parseResource(Communication.class, resourceBody );
-            jsonParser.setPrettyPrint(true);
-            encode = jsonParser.encodeResourceToString(comm);
-        } else {
-            comm = jsonParser.parseResource(Communication.class, resourceBody );
-            xmlParser.setPrettyPrint(true);
-            encode = xmlParser.encodeResourceToString(comm);
+        Boolean output = false;
+        if ( theArgs.length == 2 ) {
+            output = true;
         }
 
-        System.setOut(orig);
-        System.out.println(encode);
+        FhirContext ctx = FhirContext.forDstu2();
+
+        ctx.setParserErrorHandler(new StrictErrorHandler());
+
+        //FhirValidator val = ctx.newValidator();
+
+        // Create a XML parser
+        IParser xmlParser = ctx.newXmlParser();
+        // Create a JSON parser
+        IParser jsonParser = ctx.newJsonParser();
+    
+        String encode = "";
+        Communication comm;
+        if ( start.equals( "xml" ) ) {
+            try {
+                comm = xmlParser.parseResource(Communication.class, resourceBody );
+                //ValidationResult result = val.validateWithResult( comm );
+                //if ( !result.isSuccessful() ) {
+                    //System.exit(1);
+                //}
+                if ( output ) {
+                    jsonParser.setPrettyPrint(true);
+                    encode = jsonParser.encodeResourceToString(comm);
+                }
+            } catch ( DataFormatException dfe ) {
+                System.exit(1);
+            }
+        } else {
+            try {
+                comm = jsonParser.parseResource(Communication.class, resourceBody );
+                //ValidationResult result = val.validateWithResult( comm );
+                //if ( !result.isSuccessful() ) {
+                //System.exit(1);
+                //}
+                if ( output ) {
+                    xmlParser.setPrettyPrint(true);
+                    encode = xmlParser.encodeResourceToString(comm);
+                }
+            } catch ( DataFormatException dfe ) {
+                System.out.println( dfe.getMessage() );
+                System.exit(1);
+            }
+        }
+    
+        if ( output ) {
+            System.setOut(orig);
+            System.out.println(encode);
+        }
         
     }
 }
