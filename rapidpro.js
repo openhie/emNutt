@@ -13,13 +13,30 @@ exports.process = function( type, nconf, db, mongo, resource, callback ) {
             if ( resource.event == 'mt_sent' || resource.event == 'mt_dlvd' ) {
                 findResource( resource, db, function ( communication, recipient ) {
                     if ( communication ) {
+                        eventDate = new Date();
+                        if ( resource.event == 'mt_sent' && !communication.sent ) {
+                            communication.sent = eventDate;
+                        }
+                        if ( resource.event == 'mt_dlvd' && !communication.received ) {
+                            communication.received = eventDate;
+                        }
                         if ( communication.status != 'completed' ) {
                             communication.status = 'in-progress';
                         }
+                        if ( !communication.extension ) {
+                            communication.extension = [];
+                        }
+                        communication.extension.push( { url : "Communication.dissemination", extension : [
+                            { url : "Communication.dissemination.status", valueCodeableConcept : { coding : { code: "in-progress", system : "2.16.840.1.113883.4.642.1.79" } } },
+                            { url : "Communication.dissemination.timestamp", valueInstant : eventDate },
+                            { url : "Communication.dissemination.recipient", valueReference : recipient },
+                            ] } );
+                        /*
                         if ( !communication.dissemination ) {
                             communication.dissemination = [];
                         }
                         communication.dissemination.push( {status : 'in-progress', timestamp : new Date(), recipient: recipient } );
+                        */
                         callback( communication );
                     }
                 });
@@ -30,10 +47,21 @@ exports.process = function( type, nconf, db, mongo, resource, callback ) {
         findResourceByRun( resource.run, resource, db, function( communication, recipient ) {
             if ( communication ) {
                 communication.status = 'completed';
+                if ( !communication.extension ) {
+                    communication.extension = [];
+                }
+                communication.extension.push( { url : "Communication.dissemination", extension : [
+                    { url : "Communication.dissemination.status", valueCodeableConcept : { coding : { code: "completed", system : "2.16.840.1.113883.4.642.1.79" } } },
+                    { url : "Communication.dissemination.timestamp", valueInstant : new Date() },
+                    { url : "Communication.dissemination.response", valueString : resource.text },
+                    { url : "Communication.dissemination.recipient", valueReference : recipient },
+                    ] } );
+                /*
                 if ( !communication.dissemination ) {
                     communication.dissemination = [];
                 }
                 communication.dissemination.push( {status : 'completed', timestamp : new Date(), response : resource.text, recipient: recipient } );
+                */
                 callback( communication );
             }
         });
