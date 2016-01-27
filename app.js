@@ -502,36 +502,42 @@ function searchCommunication( query, post, request, response ) {
         }
     }
     console.log("search terms are:"+JSON.stringify(find_args,null,2));
+    if ( Object.keys(find_args).length == 0 ) {
+        response.status(500);
+        response.json({err:"No search terms generated."});
+        response.end();
+    } else {
 
-    var comm = db.collection("Communication");
-    var bundle = { resourceType : 'Bundle',
-        type : 'searchset',
-        entry : []
-    };
-    comm.find( find_args, {"_id" : false } ).toArray( function( err, docs ) {
-        if ( err ) {
-            response.status(400);
-            response.end();
-        } else {
-            bundle.total = docs.length;
-            for( i in docs ) {
-                bundle.entry.push( { fullUrl : "http://"+request.headers.host+"/Communication/"+docs[i].id+"/_history/"+docs[i].meta.versionId,
-                    resource : docs[i],
-                    search : { mode : 'match', score : 1 }
-                } );
-            }
-            response.status(200);
-            if ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) {
-                response.type("application/xml+fhir");
-                response.send( fhir.ObjectToXml(bundle) );
+        var comm = db.collection("Communication");
+        var bundle = { resourceType : 'Bundle',
+            type : 'searchset',
+            entry : []
+        };
+        comm.find( find_args, {"_id" : false } ).toArray( function( err, docs ) {
+            if ( err ) {
+                response.status(400);
+                response.end();
             } else {
-                response.type("application/json+fhir");
-                response.json(bundle);
+                bundle.total = docs.length;
+                for( i in docs ) {
+                    bundle.entry.push( { fullUrl : "http://"+request.headers.host+"/Communication/"+docs[i].id+"/_history/"+docs[i].meta.versionId,
+                        resource : docs[i],
+                        search : { mode : 'match', score : 1 }
+                    } );
+                }
+                response.status(200);
+                if ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) {
+                    response.type("application/xml+fhir");
+                    response.send( fhir.ObjectToXml(bundle) );
+                } else {
+                    response.type("application/json+fhir");
+                    response.json(bundle);
+                }
+                response.end();
             }
-            response.end();
-        }
-        
-    });
+
+        });
+    }
 
 }
 
@@ -571,6 +577,9 @@ function parseSearch( key, value ) {
             break;
         case 'identifier' :
             return {"identifier.value" : parsePrefix( prefix, value ) };
+            break;
+        case 'status' :
+            return {"status" : parsePrefix( prefix, value ) };
             break;
         case "subject" :
             if ( prefix == 'eq' ) {
