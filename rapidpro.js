@@ -1,4 +1,5 @@
 var http = require('http');
+var convert = require('./convert');
 
 exports.process = function( type, nconf, db, mongo, resource, callback ) {
     if ( type == 'create' || type == 'update' || type == 'failed' ) {
@@ -113,8 +114,14 @@ function sendMessage( nconf, db, resource, callback ) {
                                 var ref = JSON.parse(body);
                                 runRapidPro(ref, msg, nconf, db, resource, callback);
                             } else if ( res.headers['content-type'] == 'application/fhir+xml' ) {
-                                fhir.XmlToObject(body).then( function ( ref ) {
-                                    runRapidPro(ref, msg, nconf, db, resource, callback);
+                                convert.format( 'xml', req.body, function( err, converted ) {
+                                    if ( err ) {
+                                        console.log("Failed to convert remote resource to JSON: "+resource.recipient[i].reference);
+                                        console.log(err);
+                                    } else {
+                                        updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
+                                        runRapidPro(JSON.parse(converted), msg, nconf, db, resource, callback);
+                                    }
                                 });
                             } else {
                                 console.log("Invalid content type for "+resource.recipient[i].reference);
@@ -124,6 +131,10 @@ function sendMessage( nconf, db, resource, callback ) {
                             console.log("Error trying to access "+resource.recipient[i].reference);
                             console.log(e);
                         });
+                    });
+                    req.on('error', function(req_err) {
+                        console.log("Got error on request to rapidpro");
+                        console.log(req_err);
                     });
                 }
             }
@@ -169,8 +180,8 @@ function runRapidPro( recipient, msg, nconf, db, resource, callback ) {
         path : "/api/v1/runs.json",
         headers : {
             'Content-Type': "application/json",
-            'Authorization' : nconf.get("rapidpro:token"),
-            'Content-Length' : postdata.length
+        'Authorization' : nconf.get("rapidpro:token"),
+        'Content-Length' : postdata.length
         },
         method : 'POST' }, function( res ) {
             console.log("RapidPro Status: " +res.statusCode );
@@ -207,6 +218,12 @@ function runRapidPro( recipient, msg, nconf, db, resource, callback ) {
                 callback( resource );
             });
         });
+    req.on('error', function( req_err ) {
+        console.log("Got error on request to rapidpro");
+        console.log(req_err);
+        resource.status = 'failed';
+        callback( resource );
+    });
     req.write(postdata);
     req.end();
 }
@@ -260,3 +277,8 @@ function findResourceByRun( run, rp_event, db, callback ) {
         }
     });
 }
+
+process.on('uncaughtException', function(err) {
+    console.log("Unhandled exception:");
+    console.log(err);
+});

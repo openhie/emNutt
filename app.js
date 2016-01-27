@@ -6,7 +6,7 @@ var bodyParser = require('body-parser');
 var mongo = require('mongodb');
 var nconf = require("nconf");
 
-var spawn = require('child_process').spawn;
+var convert = require('./convert');
 
 nconf.defaults( { 
     "app:port" : 3000, 
@@ -101,7 +101,7 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                convertFormat( 'json', JSON.stringify(doc), function( err, converted ) {
+                convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json({err:"Failed to convert to XML"});
@@ -138,7 +138,7 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                convertFormat( 'json', JSON.stringify(doc), function( err, converted ) {
+                convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json({err:"Failed to convert to XML"});
@@ -171,14 +171,14 @@ app.post("/fhir/Communication", function( req, res ) {
         res.json({err:"Conditional create not supported."});
         res.end();
     } else if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        validateFhir( 'xml', req.body, function( success ) {
+        convert.validate( 'xml', req.body, function( success ) {
             if ( !success ) {
                 res.status(400);
                 res.json({err:"Invalid XML FHIR resource)."});
                 res.end();
                 console.log("not valid should be 400");
             } else {
-                convertFormat( 'xml', req.body, function( err, converted ) {
+                convert.format( 'xml', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json({err:"Failed to convert XML to JSON"});
@@ -190,7 +190,7 @@ app.post("/fhir/Communication", function( req, res ) {
             }
         });
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        validateFhir( 'json', JSON.stringify( req.body ), function ( success ) {
+        convert.validate( 'json', JSON.stringify( req.body ), function ( success ) {
             if ( !success ) {
                 res.status(400);
                 res.json({err:"Invalid JSON FHIR resource)."});
@@ -211,7 +211,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     var contentType = origContentType.split(';')[0];
     if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        validateFhir( 'xml', req.body, function ( success ) {
+        convert.validate( 'xml', req.body, function ( success ) {
             if ( !success ) {
                 res.status(400);
                 res.json({err:"Invalid XML FHIR resource)."});
@@ -219,7 +219,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
                 console.log("not valid should be 400");
             } else {
 
-                convertFormat( 'xml', req.body, function( err, converted ) {
+                convert.format( 'xml', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json({err:"Failed to convert XML to JSON"});
@@ -231,7 +231,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
             }
         });
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        validateFhir( 'json', JSON.stringify( req.body ), function( success ) {
+        convert.validate( 'json', JSON.stringify( req.body ), function( success ) {
             if ( !success ) {
                 res.status(400);
                 res.json({err:"Invalid JSON FHIR resource)."});
@@ -745,64 +745,3 @@ function processPlugins( type, resource ) {
     }
 }
 
-
-function validateFhir( type, data, callback ) {
-    try {
-        var child = spawn('java', [ '-classpath', 
-                './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
-                'FhirXmlJson', type], { stdio: 'pipe' } );
-
-        child.stdin.write(data);
-        child.stdin.end();
-
-        child.on('close', function( code ) {
-            //console.log("child exited with code "+code);
-            if ( code == 1 ) {
-                callback( false );
-            } else if ( code == 0 ) {
-                callback( true );
-            } else {
-                console.log( "Unknown exit code for validation/conversion: "+code);
-                callback( false );
-            }
-        });
-    } catch( err ) {
-        callback( err );
-    }
-
-}
-
-function convertFormat( type, data, callback ) {
-
-    try {
-        var child = spawn('java', [ '-classpath', 
-                './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
-                'FhirXmlJson', type, 1], { stdio: 'pipe' } );
-
-        child.stdin.write(data);
-        child.stdin.end();
-
-        child.stderr.on('data', function( chunk ) {
-            // Ignore the stderr for now because there is a lot of output.  Can display it if there is an issue to track down.
-        });
-
-        var resourceOutput = "";
-        child.stdout.on('data', function( chunk ) {
-            resourceOutput += chunk;
-        });
-
-        child.on('close', function( code ) {
-            //console.log("child exited with code "+code);
-            if ( code == 1 ) {
-                callback( "Failed to validate." );
-            } else if ( code == 0 ) {
-                callback( null, resourceOutput );
-            } else {
-                callback( "Unknown exit code for validation/conversion: "+code);
-            }
-        });
-    } catch( err ) {
-        callback( err );
-    }
-
-}
