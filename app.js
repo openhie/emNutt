@@ -65,8 +65,10 @@ app.use(bodyParser.urlencoded({ extended: false }));
 var plugin_list = nconf.get("app:plugins");
 var plugins = Array();
 
-for ( var i=0, end=plugin_list.length; i < end; i++ ) {
-    plugins[i] = require("./"+plugin_list[i]);
+if ( plugin_list && Array.isArray( plugin_list ) ) {
+    for ( var i=0, end=plugin_list.length; i < end; i++ ) {
+        plugins[i] = require("./"+plugin_list[i]);
+    }
 }
 
 var uri = nconf.get("mongo:uri");
