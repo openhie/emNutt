@@ -137,7 +137,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
         path : nconf.get("dhis2:base") + "/api/messageConversations",
         headers : {
             'Content-Type': "application/json",
-            'Authorization' : "Basic " + new Buffer(nconf.get("dhis2:user")+":"+nconf.get("dhis2:pass").toString('base64'),
+            'Authorization' : "Basic " + new Buffer(nconf.get("dhis2:user")+":"+nconf.get("dhis2:pass")).toString('base64'),
             'Content-Length' : postdata.length
         },
         method : 'POST' }, function( res ) {
