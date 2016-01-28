@@ -26,12 +26,12 @@ exports.validate = function( type, data, callback ) {
 
 }
 
-exports.format = function( type, data, callback ) {
+exports.format = function( type, resourceType,  data, callback ) {
 
     try {
         var child = spawn('java', [ '-classpath', 
                 './java:./java/hapi-fhir-base-1.3.jar:./java/slf4j-api-1.7.12.jar:./java/hapi-fhir-structures-dstu2-1.3.jar:./java/commons-lang3-3.4.jar:./java/javax.json-1.0.4.jar:./java/logback-classic-1.1.3.jar:./java/logback-core-1.1.3.jar:./java/woodstox-core-asl-4.4.1.jar:./java/stax2-api-3.1.4.jar',
-                'FhirXmlJson', type, 1], { stdio: 'pipe' } );
+                'FhirXmlJson', type, resourceType, 1], { stdio: 'pipe' } );
 
         child.stdin.write(data);
         child.stdin.end();

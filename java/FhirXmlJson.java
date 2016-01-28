@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.dstu2.resource.Communication;
+import ca.uhn.fhir.model.dstu2.resource.Bundle;
 import ca.uhn.fhir.parser.IParser;
 import ca.uhn.fhir.parser.StrictErrorHandler;
 import ca.uhn.fhir.parser.DataFormatException;
@@ -44,8 +45,12 @@ public class FhirXmlJson {
         if ( theArgs.length >= 1 ) {
             start = theArgs[0];
         }
+        String type = "Communication";
+        if ( theArgs.length >= 2 ) {
+            type = theArgs[1];
+        }
         Boolean output = false;
-        if ( theArgs.length == 2 ) {
+        if ( theArgs.length == 3 ) {
             output = true;
         }
 
@@ -61,37 +66,65 @@ public class FhirXmlJson {
         IParser jsonParser = ctx.newJsonParser();
     
         String encode = "";
-        Communication comm;
-        if ( start.equals( "xml" ) ) {
-            try {
-                comm = xmlParser.parseResource(Communication.class, resourceBody );
-                //ValidationResult result = val.validateWithResult( comm );
-                //if ( !result.isSuccessful() ) {
+
+
+        if ( type.equals("Communication") ) {
+            Communication comm;
+            if ( start.equals( "xml" ) ) {
+                try {
+                    comm = xmlParser.parseResource(Communication.class, resourceBody );
+                    //ValidationResult result = val.validateWithResult( comm );
+                    //if ( !result.isSuccessful() ) {
+                        //System.exit(1);
+                    //}
+                    if ( output ) {
+                        jsonParser.setPrettyPrint(true);
+                        encode = jsonParser.encodeResourceToString(comm);
+                    }
+                } catch ( DataFormatException dfe ) {
+                    System.exit(1);
+                }
+            } else {
+                try {
+                    comm = jsonParser.parseResource(Communication.class, resourceBody );
+                    //ValidationResult result = val.validateWithResult( comm );
+                    //if ( !result.isSuccessful() ) {
                     //System.exit(1);
-                //}
-                if ( output ) {
-                    jsonParser.setPrettyPrint(true);
-                    encode = jsonParser.encodeResourceToString(comm);
+                    //}
+                    if ( output ) {
+                        xmlParser.setPrettyPrint(true);
+                        encode = xmlParser.encodeResourceToString(comm);
+                    }
+                } catch ( DataFormatException dfe ) {
+                    System.out.println( dfe.getMessage() );
+                    System.exit(1);
                 }
-            } catch ( DataFormatException dfe ) {
-                System.exit(1);
             }
-        } else {
-            try {
-                comm = jsonParser.parseResource(Communication.class, resourceBody );
-                //ValidationResult result = val.validateWithResult( comm );
-                //if ( !result.isSuccessful() ) {
-                //System.exit(1);
-                //}
-                if ( output ) {
-                    xmlParser.setPrettyPrint(true);
-                    encode = xmlParser.encodeResourceToString(comm);
+        } else if ( type.equals("Bundle") ) {
+            Bundle bundle;
+            if ( start.equals( "xml" ) ) {
+                try {
+                    bundle = xmlParser.parseResource(Bundle.class, resourceBody );
+                    if ( output ) {
+                        jsonParser.setPrettyPrint(true);
+                        encode = jsonParser.encodeResourceToString(bundle);
+                    }
+                } catch ( DataFormatException dfe ) {
+                    System.exit(1);
                 }
-            } catch ( DataFormatException dfe ) {
-                System.out.println( dfe.getMessage() );
-                System.exit(1);
+            } else {
+                try {
+                    bundle = jsonParser.parseResource(Bundle.class, resourceBody );
+                    if ( output ) {
+                        xmlParser.setPrettyPrint(true);
+                        encode = xmlParser.encodeResourceToString(bundle);
+                    }
+                } catch ( DataFormatException dfe ) {
+                    System.out.println( dfe.getMessage() );
+                    System.exit(1);
+                }
             }
-        }
+         }
     
         if ( output ) {
             System.setOut(orig);

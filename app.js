@@ -140,8 +140,8 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
     
-            if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
+            if ( ( !req.accepts('json') && req.accepts('xml') ) || ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) ) {
+                convert.format( 'json', 'Communication', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
@@ -177,8 +177,8 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
     
-            if ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) {
-                convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
+            if ( ( !req.accepts('json') && req.accepts('xml') ) || ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) ) {
+                convert.format( 'json', 'Communication', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
@@ -215,7 +215,7 @@ app.post("/fhir/Communication", function( req, res ) {
                 res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
                 res.end();
             } else {
-                convert.format( 'xml', req.body, function( err, converted ) {
+                convert.format( 'xml', 'Communication', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
@@ -255,7 +255,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
                 res.end();
             } else {
 
-                convert.format( 'xml', req.body, function( err, converted ) {
+                convert.format( 'xml', 'Communication', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
                         res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
@@ -600,14 +600,23 @@ function searchCommunication( query, post, request, response ) {
                     } );
                 }
                 response.status(200);
-                if ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) {
-                    response.type("application/xml+fhir");
-                    response.send( fhir.ObjectToXml(bundle) );
+                if ( ( !request.accepts('json') && request.accepts('xml') ) || ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) ) {
+                    convert.format( 'json', 'Bundle', JSON.stringify(bundle), function( err, converted ) {
+                        if ( err ) {
+                            response.status(500);
+                            response.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
+                        } else {
+                            response.status(200);
+                            response.type("application/xml+fhir");
+                            response.send( converted );
+                        }
+                        response.end();
+                    });
                 } else {
                     response.type("application/json+fhir");
                     response.json(bundle);
+                    response.end();
                 }
-                response.end();
             }
 
         });
