@@ -731,12 +731,13 @@ function parseReference( field, value ) {
     var values = value.split('/');
     var parsed = {};
     if ( values.length == 2 ) {
-        var search_reg = values[0] + "\/" + values[1];
+        var search_reg = values[0] + "\/" + values[1] + '$';
         var first = {};
         first[field+".reference"] = { $regex : search_reg };
         var second = {};
-        second[field+".contained.resourceType"] = values[0];
-        second[field+".contained.id"] = values[1];
+        //second[field+".contained.resourceType"] = values[0];
+        //second[field+".contained.id"] = values[1];
+        second[field+".reference"] = "#" + values[1];
         parsed['$or'] = [ first, second ];
     } else {
         parsed[field] = parsePrefix( 'eq', value );

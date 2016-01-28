@@ -105,12 +105,24 @@ function sendMessage( nconf, db, resource, callback ) {
     } else {
 
         for( i in resource.recipient ) {
-            if ( resource.recipient[i].contained ) {
-                var ref = resource.recipient[i].contained;
-                runRapidPro(ref, msg, nconf, db, resource, callback);
-            } else if ( resource.recipient[i].reference ) {
+            //if ( resource.recipient[i].contained ) {
+                //var ref = resource.recipient[i].contained;
+                //runRapidPro(ref, msg, nconf, db, resource, callback);
+            //} else 
+            if ( resource.recipient[i].reference ) {
                 console.log("looking for "+resource.recipient[i].reference);
-                if ( /^[A-Za-z]+\/\w+/.test( resource.recipient[i].reference ) ) {
+                if ( resource.recipient[i].reference.startsWith('#') ) {
+                    if ( resource.contained ) {
+                        for( j in resource.contained ) {
+                            if ( resource.contained[j].id == resource.recipient[i].reference.substring(1) ) {
+                                runRapidPro( resource.contained[j], msg, nconf, db, resource, callback );
+                                break;
+                            }
+                        }
+                    } else {
+                        console.log("Recipient refers to a #, but no contained element.");
+                    }
+                } else if ( /^[A-Za-z]+\/\w+/.test( resource.recipient[i].reference ) ) {
                     // No local lookup options, so just send through for testing...
                     runRapidPro({}, msg, nconf, db, resource, callback);
                 } else {
