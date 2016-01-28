@@ -19,6 +19,36 @@ nconf.defaults( {
 
 nconf.argv().file("config.json");
 
+const ERR_RETRIEVE = 101;
+const ERR_NOTFOUND = 102;
+const ERR_HEADER = 103;
+const ERR_CONTENT_TYPE = 104;
+const ERR_RESOURCE_TYPE = 105;
+
+const ERR_CONVERT_XML = 201;
+const ERR_CONVERT_JSON = 202;
+const ERR_VALIDATE_XML = 203;
+const ERR_VALIDATE_JSON = 204;
+const ERR_VALIDATE_ID = 205;
+
+const ERR_DB_FAIL = 301;
+
+const ERR_SEARCH = 401;
+
+var error_messages = {};
+error_messages[ERR_RETRIEVE] = "Error retrieving database resource.";
+error_messages[ERR_NOTFOUND] = "Resource not found.";
+error_messages[ERR_CONVERT_XML] = "Failed to convert resource to XML.";
+error_messages[ERR_CONVERT_JSON] = "Failed to convert resource to JSON.";
+error_messages[ERR_HEADER] = "Header option missing or not supported.";
+error_messages[ERR_VALIDATE_XML] = "XML Resource isn't valid.";
+error_messages[ERR_VALIDATE_JSON] = "JSON Resource isn't valid.";
+error_messages[ERR_CONTENT_TYPE] = "Invalid Content-Type header.";
+error_messages[ERR_RESOURCE_TYPE] = "Invalid ResourceType in resource.";
+error_messages[ERR_VALIDATE_ID] = "Invalid Resource ID.";
+error_messages[ERR_DB_FAIL] = "Database error.";
+error_messages[ERR_SEARCH] = "Search query error.";
+
 var app = express();
 
 // uncomment after placing your favicon in /public
@@ -94,10 +124,12 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
     getCommunication( req.params.fhir_id, function( err, doc ) {
         if ( err ) {
             res.status(404);
-            res.json({"err":err});
+            res.json( errorOutcome( ERR_RETRIEVE, 'error', err ) );
+            res.end();
         } else if ( !doc ) {
             res.status(404);
-            res.json({err:"Not found"});
+            res.json( errorOutcome( ERR_NOTFOUND, 'information', 'Resource '+req.params.fhir_id+' not found.' ) );
+            res.end();
         } else {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
@@ -106,9 +138,7 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
                 convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
-                        res.json({err:"Failed to convert to XML"});
-                        console.log("Failed to convert JSON to XML");
-                        console.log(err);
+                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                     } else {
                         res.status(200);
                         res.type("application/xml+fhir");
@@ -131,10 +161,12 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
     getCommunication( req.params.fhir_id, req.params.vid, function ( err, doc ) {
         if ( err ) {
             res.status(404);
-            res.json({"err":err});
+            res.json( errorOutcome( ERR_RETRIEVE, 'error', err ) );
+            res.end();
         } else if ( !doc ) {
             res.status(404);
-            res.json({err:"Not found"});
+            res.json( errorOutcome( ERR_NOTFOUND, 'information', 'Resource '+req.params.fhir_id+' version '+req.params.vid+' not found.' ) );
+            res.end();
         } else {
             res.setHeader("Last-Modified", doc.meta.lastUpdated);
             res.setHeader("ETag", doc.meta.versionId);
@@ -143,9 +175,7 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
                 convert.format( 'json', JSON.stringify(doc), function( err, converted ) {
                     if ( err ) {
                         res.status(500);
-                        res.json({err:"Failed to convert to XML"});
-                        console.log("Failed to convert JSON to XML");
-                        console.log(err);
+                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                     } else {
                         res.status(200);
                         res.type("application/xml+fhir");
@@ -170,20 +200,19 @@ app.post("/fhir/Communication", function( req, res ) {
     var contentType = origContentType.split(';')[0];
     if ( req.headers['if-none-exist'] ) {
         res.status(412);
-        res.json({err:"Conditional create not supported."});
+        res.json( errorOutcome( ERR_HEADER, 'error', "The If-None-Exist header isn't currently supported." ) );
         res.end();
     } else if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
         convert.validate( 'xml', req.body, function( success ) {
             if ( !success ) {
                 res.status(400);
-                res.json({err:"Invalid XML FHIR resource)."});
+                res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
                 res.end();
-                console.log("not valid should be 400");
             } else {
                 convert.format( 'xml', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
-                        res.json({err:"Failed to convert XML to JSON"});
+                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                         res.end();
                     } else {
                         createCommunication( JSON.parse(converted), res, req );
@@ -195,7 +224,7 @@ app.post("/fhir/Communication", function( req, res ) {
         convert.validate( 'json', JSON.stringify( req.body ), function ( success ) {
             if ( !success ) {
                 res.status(400);
-                res.json({err:"Invalid JSON FHIR resource)."});
+                res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
                 res.end();
             } else {
                 createCommunication( req.body, res, req );
@@ -203,7 +232,7 @@ app.post("/fhir/Communication", function( req, res ) {
         });
     } else {
         res.status(400);
-        res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
+        res.json( errorOutcome( ERR_CONTENT_TYPE, 'error', "Invalid content type: "+contentType+" ("+origContentType+")" ) );
         res.end();
     }
 });
@@ -216,15 +245,14 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
         convert.validate( 'xml', req.body, function ( success ) {
             if ( !success ) {
                 res.status(400);
-                res.json({err:"Invalid XML FHIR resource)."});
+                res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
                 res.end();
-                console.log("not valid should be 400");
             } else {
 
                 convert.format( 'xml', req.body, function( err, converted ) {
                     if ( err ) {
                         res.status(500);
-                        res.json({err:"Failed to convert XML to JSON"});
+                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                         res.end();
                     } else {
                         updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
@@ -236,7 +264,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
         convert.validate( 'json', JSON.stringify( req.body ), function( success ) {
             if ( !success ) {
                 res.status(400);
-                res.json({err:"Invalid JSON FHIR resource)."});
+                res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
                 res.end();
             } else {
                 updateCommunication( req.params.fhir_id, req.body, res, req );
@@ -244,7 +272,7 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
         });
     } else {
         res.status(400);
-        res.json({err:"Invalid content type: "+contentType+" ("+origContentType+")"});
+        res.json( errorOutcome( ERR_CONTENT_TYPE, 'error', "Invalid content type: "+contentType+" ("+origContentType+")" ) );
         res.end();
     }
 });
@@ -325,7 +353,7 @@ function getVersion( fhir_id, callback ) {
 
     comm.findOne( { id : fhir_id }, { "meta.versionId" : 1 }, function( err, doc ) {
         if ( err ) {
-            return callback( "Failed to find "+fhir_id );
+            return callback( err );
         }
         return callback( undefined, doc );
     });
@@ -362,17 +390,18 @@ function updateCommunication( fhir_id, resource, response, request ) {
     } else {
     */
         getVersion( fhir_id, function ( err, data ) {
-            console.log("get version found:");
-            console.log(data);
-            console.log(err);
-            if ( !data ) {
+            if ( err ) {
+                response.status(500);
+                response.json( errorOutcome, ERR_RETRIEVE, 'error', err );
+                response.end();
+            } else if ( !data ) {
                 if ( resource.resourceType != "Communication" ) {
                     response.status(404);
-                    response.json({err:"Invalid resourceType (not Communication)."});
+                    response.json( errorOutcome( ERR_RESOURCE_TYPE, 'error', "Invalid resourceType (not Communication)." ) );
                     response.end();
                 } else if ( resource.id != fhir_id ) {
                     response.status(400);
-                    response.json({err:"ID doesn't match for update."});
+                    response.json( errorOutcome( ERR_VALIDATE_ID, 'error', "ID "+resource.id+" doesn't match "+fhir_id+" for update." ) );
                     response.end();
                 } else {
                     comm = db.collection("Communication");
@@ -394,9 +423,8 @@ function updateCommunication( fhir_id, resource, response, request ) {
                     comm.insertOne( resource, function ( err, r ) {
                         if ( err ) {
                             response.status(400);
+                            response.json( errorOutcome( ERR_DB_FAIL, 'error', err ) );
                             response.end();
-                            console.log("Failed to insert into database.");
-                            console.log(err);
                         } else {
                             try {
                                 copyToHistory( resource.id );
@@ -416,20 +444,20 @@ function updateCommunication( fhir_id, resource, response, request ) {
             } else {
                 if ( !request.headers['if-match'] ) {
                     response.status(412);
-                    response.json({err:"If-Match header is missing and must be supplied)."});
+                    response.json( errorOutcome( ERR_HEADER, 'error', "If-Match header is missing and must be supplied for updates." ) );
                     response.end();
                 } else {
                     if ( data.meta.versionId != request.headers['if-match'] ) {
                         response.status(409);
-                        response.json({err:"Version id from If-Match headers doesn't match current version."});
+                        response.json( errorOutcome( ERR_HEADER, 'error', "Version id from If-Match header "+request.headers['if-match']+" doesn't match current version "+data.meta.versionId+"." ) );
                         response.end();
                     } else if ( resource.resourceType != "Communication" ) {
                         response.status(404);
-                        response.json({err:"Invalid resourceType (not Communication)."});
+                        response.json( errorOutcome( ERR_RESOURCE_TYPE, 'error', "Invalid resourceType (not Communication)." ) );
                         response.end();
                     } else if ( resource.id != fhir_id ) {
                         response.status(400);
-                        response.json({err:"ID doesn't match for update."});
+                        response.json( errorOutcome( ERR_VALIDATE_ID, 'error', "ID "+resource.id+" doesn't match "+fhir_id+" for update." ) );
                         response.end();
                     } else {
                         comm = db.collection("Communication");
@@ -451,9 +479,8 @@ function updateCommunication( fhir_id, resource, response, request ) {
                                 function( err, r ) {
                                     if ( err ) {
                                         response.status(400);
+                                        response.json( errorOutcome( ERR_DB_FAIL, 'error', err ) );
                                         response.end();
-                                        console.log("Failed to update "+fhir_id+" database.");
-                                        console.log(err);
                                     } else {
                                         try {
                                             copyToHistory( resource.id );
@@ -478,11 +505,11 @@ function updateCommunication( fhir_id, resource, response, request ) {
 function createCommunication( resource, response, request ) {
     if ( resource.resourceType != "Communication" ) {
         response.status(404);
-        response.json({err:"Invalid resourceType (not Communication)."});
+        response.json( errorOutcome( ERR_RESOURCE_TYPE, 'error', "Invalid resourceType (not Communication)." ) );
         response.end();
     } else if ( resource.id && resource.id != '' ) {
         response.status(400);
-        response.json({err:"ID should not be set for create."});
+        response.json( errorOutcome( ERR_VALIDATE_ID, 'error', "ID should not be set for create.  Use PUT instead." ) );
         response.end();
     } else {
         if ( !resource.meta ) {
@@ -504,9 +531,8 @@ function createCommunication( resource, response, request ) {
         comm.insertOne( resource, function ( err, r ) {
             if ( err ) {
                 response.status(400);
+                response.json( errorOutcome( ERR_DB_FAIL, 'error', err ) );
                 response.end();
-                console.log("Failed to insert into database.");
-                console.log(err);
             } else {
                 try {
                     copyToHistory( resource.id );
@@ -546,7 +572,7 @@ function searchCommunication( query, post, request, response ) {
     console.log("search terms are:"+JSON.stringify(find_args,null,2));
     if ( Object.keys(find_args).length == 0 ) {
         response.status(500);
-        response.json({err:"No search terms generated."});
+        response.json( errorOutcome( ERR_SEARCH, 'information', 'No valid search terms were generated from query: '+JSON.stringify(query)+" post: "+JSON.stringify(post) ) );
         response.end();
     } else {
 
@@ -747,3 +773,28 @@ function processPlugins( type, resource ) {
     }
 }
 
+
+function errorOutcome( code, severity, diagnostics ) {
+    var message = error_messages[code];
+    console.log( "Error "+code+": "+message );
+    console.log( diagnostics );
+    if ( diagnostics instanceof Error ) {
+        diagnostics = diagnostics.message;
+    }
+    return {
+        resourceType : "OperationOutcome",
+        id : new mongo.ObjectId().toHexString(),
+        meta : {
+            versionId : 1,
+            lastUpdated : new Date()
+        },
+        text : message,
+        issue : [ 
+        {
+            severity : severity,
+            code : code,
+            diagnostics : diagnostics
+        }
+            ]
+    };
+}
