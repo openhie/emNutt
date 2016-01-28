@@ -8,6 +8,7 @@ var nconf = require("nconf");
 
 var convert = require('./convert');
 
+nconf.argv().file("config.json");
 nconf.defaults( { 
     "app" : { 
         "port" : 3000, 
@@ -21,7 +22,6 @@ nconf.defaults( {
     "mongo" : { "uri" : "mongodb://localhost/emNutt" }
 } );
 
-nconf.argv().file("config.json");
 
 const ERR_RETRIEVE = 101;
 const ERR_NOTFOUND = 102;
