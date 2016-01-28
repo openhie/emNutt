@@ -115,15 +115,16 @@ function sendMessage( nconf, db, resource, callback ) {
                     runRapidPro({}, msg, nconf, db, resource, callback);
                 } else {
                     var req = http.get(resource.recipient[i].reference, function (res) {
+                        var contentType = res.headers['content-type'].split(';')[0];
                         var body = '';
                         res.on('data', function(chunk) {
                             body += chunk;
                         });
                         res.on('end', function() {
-                            if ( res.headers['content-type'] == 'application/fhir+json' ) {
+                            if ( contentType == 'application/json+fhir' || contentType == 'application/json' ) {
                                 var ref = JSON.parse(body);
                                 runRapidPro(ref, msg, nconf, db, resource, callback);
-                            } else if ( res.headers['content-type'] == 'application/fhir+xml' ) {
+                            } else if ( contentType == 'application/xml+fhir' || contentType == 'application/xml' ) {
                                 convert.format( 'xml', req.body, function( err, converted ) {
                                     if ( err ) {
                                         console.log("Failed to convert remote resource to JSON: "+resource.recipient[i].reference);
