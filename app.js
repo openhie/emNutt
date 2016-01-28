@@ -9,12 +9,16 @@ var nconf = require("nconf");
 var convert = require('./convert');
 
 nconf.defaults( { 
-    "app:port" : 3000, 
-    "app:plugins" : [],
-    "app:default_mime_type" : "application/json+fhir",
-    "app:fail:delay" : 600,
-    "app:fail:retry" : 5,
-    "mongo:uri" : "mongodb://localhost/emNutt"
+    "app" : { 
+        "port" : 3000, 
+        "plugins" : [],
+        "default_mime_type" : "application/json+fhir",
+        "fail" : { 
+            "delay" : 600,
+            "retry" : 5
+        }
+    },
+    "mongo" : { "uri" : "mongodb://localhost/emNutt" }
 } );
 
 nconf.argv().file("config.json");
