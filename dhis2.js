@@ -1,7 +1,8 @@
 /*
  * Options for config.json:
  * "dhis2": {
- *     "protocol" : "http:",
+ *     "system" : "https://apps.dhis2.org/demo/api/users",
+ *     "protocol" : "http",
  *     "host" : "demo.dhis2.org",
  *     "base" : "/demo",
  *     "port" : "80",
@@ -11,6 +12,7 @@
  * }
  */
 var http = require('http');
+var https = require('https');
 var convert = require('./convert');
 
 exports.process = function( type, nconf, db, mongo, resource, callback ) {
@@ -47,12 +49,12 @@ function sendMessage( nconf, db, resource, callback ) {
         for( i in resource.recipient ) {
             if ( resource.recipient[i].contained ) {
                 var ref = resource.recipient[i].contained;
-                createMesage(ref, msg, nconf, db, resource, callback);
+                createMessage(ref, msg, nconf, db, resource, callback);
             } else if ( resource.recipient[i].reference ) {
                 console.log("looking for "+resource.recipient[i].reference);
                 if ( /^[A-Za-z]+\/\w+/.test( resource.recipient[i].reference ) ) {
                     // No local lookup options, so just send through for testing...
-                    //createMesage({}, msg, nconf, db, resource, callback);
+                    //createMessage({}, msg, nconf, db, resource, callback);
                     console.log("No recipient found for "+resource.recipient[i].reference+" so nothing to do.");
                 } else {
                     var req = http.get(resource.recipient[i].reference, function (res) {
@@ -64,7 +66,7 @@ function sendMessage( nconf, db, resource, callback ) {
                         res.on('end', function() {
                             if ( contentType == 'application/json+fhir' || contentType == 'application/json' ) {
                                 var ref = JSON.parse(body);
-                                createMesage(ref, msg, nconf, db, resource, callback);
+                                createMessage(ref, msg, nconf, db, resource, callback);
                             } else if ( contentType == 'application/xml+fhir' || contentType == 'application/xml' ) {
                                 convert.format( 'xml', req.body, function( err, converted ) {
                                     if ( err ) {
@@ -99,18 +101,22 @@ function sendMessage( nconf, db, resource, callback ) {
 function createMessage( recipient, msg, nconf, db, resource, callback ) {
     var user;
 
-    var system = nconf.get("dhis2:protocol")+"//"+nconf.get("dhis2:host");
-    if ( ( nconf.get("dhis2:protocol") == "http:" && parseInt(nconf.get("dhis2:port")) != 80 ) 
-            || ( nconf.get("dhis2:protocol") == "https:" && parseInt(nconf.get("dhis2:port")) != 443 ) ) {
-        system += ":"+nconf.get("dhis2:port");
-    }
-    if ( nconf.get("dhis2:base") ) {
-        system += nconf.get("dhis2:base");
+    var system = nconf.get("dhis2:system");
+    if ( !system ) {
+        system = nconf.get("dhis2:protocol")+"://"+nconf.get("dhis2:host");
+        if ( ( nconf.get("dhis2:protocol") == "http" && parseInt(nconf.get("dhis2:port")) != 80 ) 
+                || ( nconf.get("dhis2:protocol") == "https" && parseInt(nconf.get("dhis2:port")) != 443 ) ) {
+            system += ":"+nconf.get("dhis2:port");
+        }
+        if ( nconf.get("dhis2:base") ) {
+            system += nconf.get("dhis2:base");
+        }
+        system += "/api/users";
     }
 
     if ( recipient.identifier && Array.isArray( recipient.identifier ) && recipient.identifier.length > 0 ) {
         for ( j in recipient.identifier ) {
-            if ( recipient.identifier[j].system && recipient.identifier[j].system == nconf.get("dhis2:base_url")+"/api/users" ) {
+            if ( recipient.identifier[j].system && recipient.identifier[j].system == system ) {
                 user = recipient.identifier[j].value;
                 break;
             }
@@ -123,16 +129,20 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
     if ( !user ) {
         return;
     }
-    var postdata = {
+    var postdata = JSON.stringify({
         subject: nconf.get("dhis2:subject"),
         text: msg,
         users: [
         { id : user }
         ]
-    };
+    });
+
+    var proto = http;
+    if ( nconf.get("dhis2:protocol") == "https" ) {
+        proto = https;
+    }
         
-    var req = http.request( {
-        protocol : nconf.get("dhis2:protocol"),
+    var req = proto.request( {
         hostname : nconf.get("dhis2:host"),
         port : nconf.get("dhis2:port"),
         path : nconf.get("dhis2:base") + "/api/messageConversations",
