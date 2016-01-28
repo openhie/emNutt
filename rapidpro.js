@@ -1,3 +1,13 @@
+/*
+ * config.json options:
+ * "rapidpro": {
+ *     "flow_uuid": "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX", // flow UUID to send the message through
+ *     "host" : "host",
+ *     "port" : "80",
+ *     "token" : "Token XXXXXXXXXXXXXX",  // authorization token
+ *     "testing" : "+1XXXXXXXXXX"         // Phone number to use for testing if nothing else is found in the resource.
+ * },
+ */
 var http = require('http');
 var convert = require('./convert');
 
