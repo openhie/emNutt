@@ -277,8 +277,3 @@ function findResourceByRun( run, rp_event, db, callback ) {
         }
     });
 }
-
-process.on('uncaughtException', function(err) {
-    console.log("Unhandled exception:");
-    console.log(err);
-});
