@@ -146,6 +146,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
         hostname : nconf.get("dhis2:host"),
         port : nconf.get("dhis2:port"),
         path : nconf.get("dhis2:base") + "/api/messageConversations",
+        rejectUnauthorized : false,
         headers : {
             'Content-Type': "application/json",
             'Authorization' : "Basic " + new Buffer(nconf.get("dhis2:user")+":"+nconf.get("dhis2:pass")).toString('base64'),
