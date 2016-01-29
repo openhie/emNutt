@@ -45,7 +45,6 @@ function sendMessage( nconf, db, resource, callback ) {
     if ( !msg ) {
         console.log("Unable to decipher message from "+resource.id);
     } else {
-
         for( i in resource.recipient ) {
             //if ( resource.recipient[i].contained ) {
                 //var ref = resource.recipient[i].contained;
@@ -114,7 +113,6 @@ function sendMessage( nconf, db, resource, callback ) {
 
 function createMessage( recipient, msg, nconf, db, resource, callback ) {
     var user;
-
     var system = nconf.get("dhis2:system");
     if ( !system ) {
         system = nconf.get("dhis2:protocol")+"://"+nconf.get("dhis2:host");
@@ -176,9 +174,9 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
             res.on('end', function() {
                 console.log("DHIS2 response: "+body);
                 if ( res.statusCode != 201 ) {
-                    resource.status = 'completed';
-                } else {
                     resource.status = 'rejected';
+                } else {
+                    resource.status = 'completed';
                 }
                 callback( resource );
             });
