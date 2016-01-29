@@ -138,6 +138,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
     }
     if ( !user ) {
         // Check for testing number if nothing is found.
+	console.log("No user found for " + system);
         user = nconf.get("rapidpro:testing");
     }
     if ( !user ) {
@@ -155,7 +156,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
     if ( nconf.get("dhis2:protocol") == "https" ) {
         proto = https;
     }
-        
+    console.log("Sending to DHIS2:" + postdata);
     var req = proto.request( {
         hostname : nconf.get("dhis2:host"),
         port : nconf.get("dhis2:port"),
