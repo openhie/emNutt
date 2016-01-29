@@ -1,2 +1,4 @@
 # ignore configuration file
 config.json
+node_modules/
+npm-debug.log
