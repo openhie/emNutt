@@ -368,10 +368,9 @@ function getVersion( fhir_id, callback ) {
 
 function internalUpdate( resource ) {
     comm = db.collection("Communication");
-
+    delete resource._id;
     resource.meta.lastUpdated = new Date();
     resource.meta.versionId++;
-
     comm.updateOne( { id: resource.id }, { $set : resource }, function ( err, r ) {
         if ( err ) {
             console.log("Failed to update "+resource.id);
