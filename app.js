@@ -638,7 +638,7 @@ function parseSearch( key, value ) {
             return {id : parsePrefix( prefix, value ) };
             break;
         case '_lastUpdated' :
-            return {"meta.lastUpdated" : parsePrefix( prefix, value ) };
+            return {"meta.lastUpdated" : parsePrefix( prefix, new Date(value) ) };
             break;
         case '_language' :
             return {"language" : parsePrefix( prefix, value ) };
@@ -664,7 +664,14 @@ function parseSearch( key, value ) {
         case 'status' :
             return {"status" : parsePrefix( prefix, value ) };
             break;
-        case "subject" :
+        case "patient" :
+            if ( prefix == 'eq' ) {
+                return parseReference( 'subject', value );
+            } else {
+                console.log("Don't know how to handle reference search other than eq for subject.");
+                return { subject : parsePrefix( prefix, value ) };
+            }
+         case "subject" :
             if ( prefix == 'eq' ) {
                 return parseReference( 'subject', value );
             } else {
