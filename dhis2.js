@@ -175,7 +175,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
             });
             res.on('end', function() {
                 console.log("DHIS2 response: "+body);
-                if ( res.statusCode != 201 ) {
+                if ( res.statusCode == 201 ) {
                     resource.status = 'completed';
                 } else {
                     resource.status = 'rejected';
