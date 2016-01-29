@@ -101,7 +101,7 @@ function sendMessage( nconf, db, resource, callback ) {
                         });
                     });
                     req.on('error', function(req_err) {
-                        console.log("Got error on request to rapidpro");
+                        console.log("Got error on request to DHIS2");
                         console.log(req_err);
                     });
                 }
@@ -139,7 +139,7 @@ function createMessage( recipient, msg, nconf, db, resource, callback ) {
     if ( !user ) {
         // Check for testing number if nothing is found.
 	console.log("No user found for " + system);
-        user = nconf.get("rapidpro:testing");
+        user = nconf.get("dhis2:testing");
     }
     if ( !user ) {
         return;
