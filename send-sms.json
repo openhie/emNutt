@@ -1,0 +1,77 @@
+{
+  "version": 8, 
+  "flows": [
+    {
+      "base_language": "base", 
+      "action_sets": [
+        {
+          "y": 0, 
+          "x": 100, 
+          "destination": "1c5140b1-5ffb-44c4-8bc2-ef008469e6fb", 
+          "uuid": "409ab07c-31db-4ad4-ac6a-1db52766f7ed", 
+          "actions": [
+            {
+              "msg": {
+                "base": "@extra.msg"
+              }, 
+              "type": "reply"
+            }
+          ]
+        }, 
+        {
+          "y": 204, 
+          "x": 112, 
+          "destination": null, 
+          "uuid": "c8c4f048-c184-46e9-b99b-714396510609", 
+          "actions": [
+            {
+              "action": "POST", 
+              "type": "api", 
+              "webhook": "http://192.168.56.63:3000/fhir/Communication/$response"
+            }
+          ]
+        }
+      ], 
+      "version": 8, 
+      "flow_type": "F", 
+      "entry": "409ab07c-31db-4ad4-ac6a-1db52766f7ed", 
+      "rule_sets": [
+        {
+          "uuid": "1c5140b1-5ffb-44c4-8bc2-ef008469e6fb", 
+          "webhook_action": null, 
+          "rules": [
+            {
+              "test": {
+                "test": "true", 
+                "type": "true"
+              }, 
+              "category": {
+                "base": "All Responses"
+              }, 
+              "destination": "c8c4f048-c184-46e9-b99b-714396510609", 
+              "uuid": "9206780d-24ff-4a3b-9899-e4a307ac72a0", 
+              "destination_type": "A"
+            }
+          ], 
+          "webhook": null, 
+          "ruleset_type": "wait_message", 
+          "label": "Response", 
+          "operand": "@step.value", 
+          "finished_key": null, 
+          "response_type": "", 
+          "y": 110, 
+          "x": 93, 
+          "config": {}
+        }
+      ], 
+      "metadata": {
+        "expires": 10080, 
+        "revision": 12, 
+        "id": 6, 
+        "name": "Send SMS", 
+        "saved_on": "2016-01-25T18:57:57.575883Z"
+      }
+    }
+  ], 
+  "triggers": []
+}
