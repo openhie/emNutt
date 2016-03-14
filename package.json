@@ -1,6 +1,6 @@
 {
-  "name": "emNutt",
-  "version": "0.0.1",
+  "name": "emnutt",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "start": "node ./app.js"
@@ -14,5 +14,25 @@
     "nconf": "~0.8.2",
     "kerberos": "~0.0.17",
     "mongodb": "~2.0.49"
-  }
+  },
+  "description": "part of the iHRIS family of health workforce data solutions",
+  "main": "app.js",
+  "directories": {
+    "example": "examples"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openhie/emNutt.git"
+  },
+  "keywords": [
+    "OpenHIE",
+    "mACM"
+  ],
+  "author": "Luke Duncan <lduncan@intrahealth.org>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/openhie/emNutt/issues"
+  },
+  "homepage": "https://github.com/openhie/emNutt#readme"
 }
