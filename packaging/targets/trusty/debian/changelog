@@ -1,0 +1,11 @@
+emnutt (1.0.0-1~trusty) trusty; urgency=medium
+
+  * Release Debian Build 1.0.0-1. Find v1.0.0 changelog here:
+
+ -- Luke Duncan <lduncan@intrahealth.org>  Thu, 31 Mar 2016 11:41:27 -0400
+
+emnutt (1.0.0-0~trusty) trusty; urgency=medium
+
+  * Release Debian Build 1.0.0-0. Find v1.0.0 changelog here:
+
+ -- Luke Duncan <lduncan@intrahealth.org>  Tue, 29 Mar 2016 10:57:05 -0400

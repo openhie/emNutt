@@ -1,0 +1,11 @@
+#!/bin/bash
+
+USERNAME=emnutt
+HOME=/home/$USERNAME
+
+service emnutt stop || true
+sleep 2
+userdel $USERNAME
+rm -r $HOME
+
+exit 0
