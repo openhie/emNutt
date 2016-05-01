@@ -1,20 +1,36 @@
 var express = require('express');
 var nconf = require("nconf");
-var http = require('http');
-var app = express();
+var hh = require('http-https')
+var bodyParser = require('body-parser');
 var convert = require('./convert');
 
+
 nconf.argv().file("config.json");
+nconf.defaults( { 
+    "rpq" : { 
+        "port" : 3001,
+	'host' : 'locahost',
+	'protocol' : 'http'
+    },
+    'rapidpro' : {
+	'host' : 'localhost',
+	'port' : '80',
+	'protocol' : 'https:',
+	'token' : false
+    }
+} );
 
 /*
  * config.json options:
- * "host" : "localhost"  ,
- * "port" : port
- * "protocol" : 'http'
+ * "rqp" : {
+ *   "host" : "localhost"  ,
+ *   "port" : '3001',
+ *   "protocol" : 'http'
+ *  },
  * "rapidpro": {
- *     "flow_uuid": "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX", // flow UUID to send the message through
  *     "host" : "host",
  *     "port" : "80",
+ *     "protocol" : 'https:'
  *     "token" : "Token XXXXXXXXXXXXXX",  // authorization token
  * },
  */
@@ -50,57 +66,80 @@ error_messages[ERR_DB_FAIL] = "Database error.";
 error_messages[ERR_SEARCH] = "Search query error.";
 
 
-app.get("/fhir/Questionnaire/:fhir_id", function( req, res ) {
-    var url = getHostURL(nconf,req) ;
-    var qs = getQuestionnaires(nconf,url,req.params.fhir_id)
-};
 
-app.get("/fhir/Questionnaire/_search", function( req, res ) {
-    var url = getHostURL(nconf,req) ;
-    var query = req.query;
-    var post = req.body;
-    if ( query ) {
-        for( i in query ) {
-            var search = parseSearch( i, query[i] );
-            for ( j in search ) {
-                filters[j] = search[j];
+var app = express();
+
+try {
+    app.use(bodyParser.json( { type : "application/json" } ));
+    app.use(bodyParser.json( { type : "application/json+fhir" } ));
+    app.use(bodyParser.text( { type : "application/xml" } ));
+    app.use(bodyParser.text( { type : "application/xml+fhir" } ));
+    app.use(bodyParser.urlencoded({ extended: false }));
+
+    var lport = nconf.get('rpq:port');
+    app.listen(lport);
+    console.log('listening on port ' + lport);
+
+
+    app.get("/fhir/Questionnaire/:fhir_id", function( req, res ) {
+	var url = getHostURL(nconf,req) ;
+	var questionnaires = getQuestionnaires(nconf,url);
+	var filter = function(questionnaire,i) { return testSearchValue(prefix, questionnaire.id, req.params.fhir_id);}
+	var questionnaire = questionnaires.filter(filter);
+	console.log("found:"+JSON.stringify(questionnaire),null,"\t");
+	console.log("found:"+ questionnaires.length);
+    });
+
+    app.get("/fhir/Questionnaire/_search", function( req, res ) {
+	var url = getHostURL(nconf,req) ;
+	var query = req.query;
+	var post = req.body;
+	if ( query ) {
+            for( i in query ) {
+		var search = parseSearch( i, query[i] );
+		for ( j in search ) {
+                    filters[j] = search[j];
+		}
             }
-        }
-    }
-    if ( post ) {
-        for( i in post ) {
-            var search = parseSearch( i, query[i] );
-            for ( j in search ) {
-                filters[j] = search[j];
+	}
+	if ( post ) {
+            for( i in post ) {
+		var search = parseSearch( i, query[i] );
+		for ( j in search ) {
+                    filters[j] = search[j];
+		}
             }
-        }
-    }
-    console.log("search terms are:"+JSON.stringify(filters,null,2));
-    if ( Object.keys(filters).length == 0 ) {
-        response.status(500);
-        response.json( errorOutcome( ERR_SEARCH, 'information', 'No valid search terms were generated from query: '+JSON.stringify(query)+" post: "+JSON.stringify(post) ) );
-        response.end();
-    } else {	
-	var questionniares = getQuestionnaires(nconf,url,req.params.fhir_id);
-	filters.forEach(function(filter)  {
+	}
+	console.log("search terms are:"+JSON.stringify(filters,null,2));
+	if ( Object.keys(filters).length == 0 ) {
+            response.status(500);
+            response.json( errorOutcome( ERR_SEARCH, 'information', 'No valid search terms were generated from query: '+JSON.stringify(query)+" post: "+JSON.stringify(post) ) );
+            response.end();
+	} else {	
+	    var questionniares = getQuestionnaires(nconf,url,req.params.fhir_id);
+	    filters.forEach(function(filter)  {
 		questionnaires = questionniares.filter(filter);
-	});	
-    }	
-};
+	    });	
+	}	
+    });
+
+} catch (e) {
+    console.log("RapidPro Questionnaire error: " +e.message);
+}
 
 function getHostURL(nconf,req) {
     var url = ''
     if (req) {
 	url = req.protocol + '://' + req.get('host') ;
     }
-    var ptcl = nconf.get('protocol');
+    var ptcl = nconf.get('app:protocol');
     if (!ptcl) {
-	ptcl = 'http';
+	ptcl = 'https:';
     }
-    var host = nconf.get('host');
-    var port = nconf.get('port');
+    var host = nconf.get('app:host');
+    var port = nconf.get('app:port');
     if (host ) {
-	url = ptcl + '://' + host;
+	url = ptcl + '//' + host;
 	if (port) {
 	    url += ':' + port;
 	}
@@ -115,11 +154,14 @@ function getQuestionnaires(nconf,url,id) {
     if (id) {
 	params += '?flow=' + id
     }
-    var req = http.request( 
+    var rurl = 'http(s)://' + nconf.get('rapidpro:host') + ':'  + nconf.get('rapidpro:port') + "/api/v1/flows.json" + params;
+    console.log('Making request ' + rurl);
+    var req = hh.request( 
 	{
             hostname : nconf.get("rapidpro:host"),
             port : nconf.get("rapidpro:port"),
-            path : "/api/v1/flows.json" + params,
+	    protocol: nconf.get('rapidpro:protocol'),
+            path :  "/api/v1/flows.json" + params,
             headers : {
 		'Content-Type': "application/json",
 		'Authorization' : nconf.get("rapidpro:token"),
@@ -128,24 +170,28 @@ function getQuestionnaires(nconf,url,id) {
 	},
 	function( res ) {
             console.log("RapidPro Status: " +res.statusCode );
+            res.on('error', function(e) {
+                console.log("RapidPro error: " +e.message);
+            });
             var body = '';
             res.on('data', function(chunk) {
                 body += chunk;
             });
-            res.on('end', 
+            res.on('end', function() {
                 console.log("RapidPro response: "+body);
                 try {
 		    var details = JSON.parse( body );
 		    if (!details.results ||
 			! Array.isArray(details.results)
 			) {
-			console.log("no flow results for " + params);
+			console.log("no flow results ");
 			return;
 		    }
 		    details.results.forEach( function(result) {
+			console.log("A");
 			var flow = getFlowExport(result.flow);
 			var questions = [];
-			if (flow.rulesets  && Array.isArray(flow.rulesets)) {			    
+			if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
 			    flow.rulesets.forEach(function(ruleset) {
 				if (!ruleset.rules || ! Array.isArray(ruleset.rules)) {
 				    return;
@@ -190,7 +236,7 @@ function getQuestionnaires(nconf,url,id) {
 					    return;
 					}
 					var type= false;
-					switch rule.test.type {
+					switch (rule.test.type) {
 					case 'phone': 
 					case 'true': //this seems to be just a text string					    
 					    types.push('string');
@@ -269,19 +315,21 @@ function getQuestionnaires(nconf,url,id) {
 				    });
 				    //now push an question for the raw response
 				    questions.push({
-					var question = {
-					    'linkId': rule.uuid  + '.raw',
-					    'type': 'string',
-					    'text': ruleset.label  + ' (Raw Response)'
-					}
-					});
+					'linkId': rule.uuid  + '.raw',
+					'type': 'string',
+					'text': ruleset.label  + ' (Raw Response)'
+				    });
 				    break;
 				default:
 				    break;
 				}
 			    });
 			}
-			var questionnare = {
+			console.log("FLOW:" + JSON.stringify(flow,null,"\t"));
+			if (!flow.metadata) {
+			    flow.metadata = {};
+			}
+			var questionnaire = {
 			    'resourceType':'Questionnaire',
 			    'id': flow.uuid,
 			    'meta' : {
@@ -290,7 +338,7 @@ function getQuestionnaires(nconf,url,id) {
 			    },
 			    'date' : flow.metadata.saved_on,
 			    //result.created_on ,
-			    'url' :  url + '/fhir/Questionnaire' + req.params.fhir_id,
+			    'url' :  url + '/fhir/Questionnaire/' + flow.uuid,
 			    'status' : result.archived ? 'retired' : 'published' ,
 			    'group' : {
 				'linkId' : 'root',
@@ -307,9 +355,6 @@ function getQuestionnaires(nconf,url,id) {
                     console.log(err);
                 }
             });
-            res.on('error', function(e) {
-                console.log("RapidPro error: " +e.message);
-            });
         });
     req.on('error', function( req_err ) {
         console.log("Got error on request to rapidpro");
@@ -324,11 +369,14 @@ function getQuestionnaires(nconf,url,id) {
 
 function getFlowExport(id) {
     var flow = {};
-    var req = http.request( 
+    var result = {};
+    console.log('Getting flow ' + id);
+    var req = hh.request( 
 	{
             hostname : nconf.get("rapidpro:host"),
             port : nconf.get("rapidpro:port"),
-            path : "/flows/export/" + id
+	    protocol: nconf.get('rapidpro:protocol'),
+            path : "/flow/export/" + id + '/',
             headers : {
 		'Content-Type': "application/json",
 		'Authorization' : nconf.get("rapidpro:token"),
@@ -344,21 +392,22 @@ function getFlowExport(id) {
             res.on('end', function() {
                 console.log("RapidPro response: "+body);
                 try {
-		    result = JSON.parse( body );
+		    resul = JSON.parse( body );
+		} catch (e) {
+                    console.log("RapidPro error: " +e.message);
 		}
 	    });
             res.on('error', function(e) {
                 console.log("RapidPro error: " +e.message);
             });
 	});
-    };
     req.on('error', function( req_err ) {
-        console.log("Got error on request to rapidpro");
-        console.log(req_err);
+    console.log("Got error on request to rapidpro");
+    console.log(req_err);
     });
     req.end();
-    if (response.flows && Array.isArray(response.flows) && response.flows.length == 1) {
-	flow = response.flows[0];
+    if (result.flows && Array.isArray(result.flows) && result.flows.length == 1) {
+	flow = result.flows[0];
     }
     return flow;
 }
@@ -377,32 +426,32 @@ function parseSearch( key, value ) {
 	switch( key ) {
 	case '_id' :
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, questionnaire.id, value);
+		return testSearchValue(prefix, questionnaire.id, value);
 	    };
             break;
 	case '_lastUpdated' : 
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, new Date(questionnaire.meta.lastUpdated), new Date(value));
+		return testSearchValue(prefix, new Date(questionnaire.meta.lastUpdated), new Date(value));
 	    };
             break;
 	case 'date' : 
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, new Date(questionnaire.date), new Date(value));
+		return testSearchValue(prefix, new Date(questionnaire.date), new Date(value));
 	    };
             break;
 	case 'status' : 
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, questionnaire.status, value);
+		return testSearchValue(prefix, questionnaire.status, value);
 	    };
             break;
 	case 'title' : 
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, questionnaire.group.title, value);
+		return testSearchValue(prefix, questionnaire.group.title, value);
 	    };
             break;
 	case 'version' : 
 	    return function(questionnaire,i) {
-		testSearchValue(prefix, questionnaire.meta.version, value);
+		return testSearchValue(prefix, questionnaire.meta.version, value);
 	    };
             break;
 	default:
