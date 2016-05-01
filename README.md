@@ -7,6 +7,8 @@ Some operating systems don't include the latest node.  emNutt requires Node 4.x.
 
 Requires java runtime for converting and validating FHIR XML and JSON content.
 
+ sudo apt-get install libkrb5-dev
+
 ## Installation
 
 Run: npm install
