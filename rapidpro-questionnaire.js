@@ -3,7 +3,7 @@ var nconf = require("nconf");
 var hh = require('http-https')
 var bodyParser = require('body-parser');
 var convert = require('./convert');
-
+var uuid = require('uuid');
 
 nconf.argv().file("config.json");
 nconf.defaults( { 
@@ -88,45 +88,82 @@ try {
 	var questionnaire = questionnaires.filter(filter);
 	console.log("found:"+JSON.stringify(questionnaire),null,"\t");
 	console.log("found:"+ questionnaires.length);
+	if ( Object.keys(questionnaire).length == 0 ) {
+            res.status(500);
+            res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire found with uuid ' + req.params.fhir_id));
+	    res.end();
+	} else if ( Object.keys(questionnaire).length >1  ) {
+            res.status(500);
+            res.json( errorOutcome( ERR_SEARCH, 'information', 'Too many questionnaires found with uuid ' + req.params.fhir_id));
+            res.end();
+	} else {
+	    res.status(200);
+	    res.type("application/json+fhir");
+            res.json(questionnaire[0]);
+            res.end();
+	}
+
     });
 
-    app.get("/fhir/Questionnaire/_search", function( req, res ) {
+    app.post("/fhir/Questionnaire/_search", function( req, res ) {
 	var url = getHostURL(nconf,req) ;
 	var query = req.query;
 	var post = req.body;
+	var filters= [];
 	if ( query ) {
             for( i in query ) {
-		var search = parseSearch( i, query[i] );
-		for ( j in search ) {
-                    filters[j] = search[j];
-		}
+		filters.push( parseSearch( i, query[i] ));
             }
 	}
 	if ( post ) {
             for( i in post ) {
-		var search = parseSearch( i, query[i] );
-		for ( j in search ) {
-                    filters[j] = search[j];
-		}
+		filters.push( parseSearch( i, post[i] ));
             }
 	}
-	console.log("search terms are:"+JSON.stringify(filters,null,2));
-	if ( Object.keys(filters).length == 0 ) {
-            response.status(500);
-            response.json( errorOutcome( ERR_SEARCH, 'information', 'No valid search terms were generated from query: '+JSON.stringify(query)+" post: "+JSON.stringify(post) ) );
-            response.end();
-	} else {	
-	    var questionniares = getQuestionnaires(nconf,url,req.params.fhir_id);
-	    filters.forEach(function(filter)  {
-		questionnaires = questionniares.filter(filter);
-	    });	
-	}	
+	var questionnaires = getQuestionnaires(nconf,url);
+	filters.forEach(function(filter)  {
+	    questionnaires = questionnaires.filter(filter);
+	});	
+	res.status(200);
+	res.type("application/json+fhir");
+        var bundle = { 
+	    resourceType : 'Bundle',
+	    type : 'searchset',
+	    entry : questionnaires
+	}
+        res.json(bundle);
     });
 
 } catch (e) {
     console.log("RapidPro Questionnaire error: " +e.message);
 }
 
+
+function errorOutcome( code, severity, diagnostics ) {
+    var message = error_messages[code];
+    console.log( "Error "+code+": "+message );
+    console.log( diagnostics );
+    if ( diagnostics instanceof Error ) {
+        diagnostics = diagnostics.message;
+    }
+    return {
+        resourceType : "OperationOutcome",
+        id : uuid.v4(),
+        meta : {
+            versionId : 1,
+            lastUpdated : new Date()
+        },
+        text : message,
+        issue : [ 
+        {
+            severity : severity,
+            code : code,
+            diagnostics : diagnostics
+        }
+            ]
+    };
+}
+ 
 function getHostURL(nconf,req) {
     var url = ''
     if (req) {
@@ -188,7 +225,6 @@ function getQuestionnaires(nconf,url,id) {
 			return;
 		    }
 		    details.results.forEach( function(result) {
-			console.log("A");
 			var flow = getFlowExport(result.flow);
 			var questions = [];
 			if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
