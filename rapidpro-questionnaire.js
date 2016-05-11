@@ -276,13 +276,13 @@ function createQuestionnaireFromFlow(url,result,flow) {
 	    if (!ruleset.rules || ! Array.isArray(ruleset.rules)) {
 		return;
 	    }			
+	    var options = [];
 	    console.log('processing ' + ruleset.ruleset_type);
 	    switch (ruleset.ruleset_type) {
 	    case 'wait_recording': //ivr recording
 		break;
 	    case 'wait_digit':	//ivr choice
 		var type = 'choice';
-		var options = [];
 		ruleset.rules.forEach(function(rule) {
 		    if (!rule.test ||  !rule.test.type == 'eq') { 
 			return;
@@ -311,8 +311,59 @@ function createQuestionnaireFromFlow(url,result,flow) {
 		questions.push(question);				    
 		break;
 	    case 'wait_digits':	//ivr multi-digit response
+		var types = ['string'];
+		ruleset.rules.forEach(function(rule) {
+		    if (!rule.test) {
+			return;
+		    }
+		    var type= false;
+		    switch (rule.test.type) {
+		    case 'phone': 
+		    case 'true': //this seems to be just a text string					    
+			types.push('string');
+			break;
+		    case 'not_empty': 
+		    case 'contains_any': 
+		    case 'contains': 
+		    case 'starts': 
+		    case 'regex': 
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {
+				'valueString' : val
+			    }
+			    options.push(option);
+			}
+			types.push('string');
+			break;
+		    case 'number':
+			types.push('integer');
+			break;
+		    case 'gt':
+		    case 'eq':
+		    case 'lt':
+		    case 'between':
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {
+				'valueString' : val
+			    }
+			    options.push(option);
+			}
+			types.push('integer');
+			break;
+		    default:
+			break;
+		    };
+		});
+		break;
 	    case 'wait_message':	//sms response
-		var options = [];
 		var types = ['string'];
 		ruleset.rules.forEach(function(rule) {
 		    if (!rule.test) {
@@ -371,22 +422,24 @@ function createQuestionnaireFromFlow(url,result,flow) {
 		    case 'lt':
 		    case 'between':
 			var val = false;
+			console.log(rule.category);
+			console.log(Object.keys(rule.category)[0]);
 			if (rule.category) {
 			    val = rule.category[Object.keys(rule.category)[0]];
 			}
+			console.log(val);
 			if (! (val === false)) {
 			    var option = {
 				'valueString' : val
 			    }
 			    options.push(option);
 			}
-			types.push('decimal');//could also be an integer
+			types.push('string');
 			break;
 		    default:
 			break;
 		    }
 		});
-		
 		utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
 		utypes.forEach(function(type) {
 		    var question = {
@@ -395,7 +448,17 @@ function createQuestionnaireFromFlow(url,result,flow) {
 			'text': ruleset.label  + ' (' + type +  ')'
 		    }
 		    questions.push(question);
-		});
+		});		    
+			       
+		if (options.length > 1) {
+		    var question = {
+			'linkId': ruleset.uuid  + '.choice',
+			'type': 'choice',
+			'options': options,
+			'text': ruleset.label + ' ( choice )'
+		    }
+		    questions.push(question);
+		}
 		//now push an question for the raw response
 		questions.push({
 		    'linkId': ruleset.uuid  + '.raw',
