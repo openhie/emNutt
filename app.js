@@ -6,7 +6,7 @@ var bodyParser = require('body-parser');
 var mongo = require('mongodb');
 var nconf = require("nconf");
 
-var convert = require('./convert');
+var Fhir = require('fhir');
 
 nconf.argv().file("config.json");
 nconf.defaults( { 
@@ -80,6 +80,7 @@ var port = nconf.get("app:port");
 
 var MongoClient = mongo.MongoClient;
 var db;
+var fhir = new Fhir(Fhir.STU3);
 
 var failedLoop;
 var failedCache = {};
@@ -141,17 +142,18 @@ app.get("/fhir/Communication/:fhir_id", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( ( !req.accepts('json') && req.accepts('xml') ) || ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) ) {
-                convert.format( 'json', 'Communication', JSON.stringify(doc), function( err, converted ) {
-                    if ( err ) {
-                        res.status(500);
-                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
-                    } else {
-                        res.status(200);
-                        res.type("application/xml+fhir");
-                        res.send( converted );
-                    }
-                    res.end();
-                });
+
+                try {
+                    var converted = fhir.ObjectToXml( doc );
+                    res.status(200);
+                    res.type("application/xml+fhir");
+                    res.send( converted );
+                } catch( err ) {
+                    res.status(500);
+                    res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
+                }
+                res.end();
+
             } else {
                 res.status(200);
                 res.type("application/json+fhir");
@@ -178,17 +180,18 @@ app.get("/fhir/Communication/:fhir_id/_history/:vid", function( req, res ) {
             res.setHeader("ETag", doc.meta.versionId);
     
             if ( ( !req.accepts('json') && req.accepts('xml') ) || ( req.query._format && ( req.query._format == "application/xml+fhir" || req.query._format == "application/xml" ) ) ) {
-                convert.format( 'json', 'Communication', JSON.stringify(doc), function( err, converted ) {
-                    if ( err ) {
-                        res.status(500);
-                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
-                    } else {
-                        res.status(200);
-                        res.type("application/xml+fhir");
-                        res.send( converted );
-                    }
-                    res.end();
-                });
+
+                try {
+                    var converted = fhir.ObjectToXml( doc );
+                    res.status(200);
+                    res.type("application/xml+fhir");
+                    res.send( converted );
+                } catch( err ) {
+                    res.status(500);
+                    res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
+                }
+                res.end();
+
             } else {
                 res.status(200);
                 res.type("application/json+fhir");
@@ -209,33 +212,33 @@ app.post("/fhir/Communication", function( req, res ) {
         res.json( errorOutcome( ERR_HEADER, 'error', "The If-None-Exist header isn't currently supported." ) );
         res.end();
     } else if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        convert.validate( 'xml', req.body, function( success ) {
-            if ( !success ) {
-                res.status(400);
-                res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
+
+        var result = fhir.ValidateXMLResource(req.body);
+        if ( result.valid ) {
+            fhir.XmlToObject( req.body.toString('utf8') ).then( function(result) {
+                createCommunication( result, res, req );
+            }).catch( function(err) {
+                res.status(500);
+                res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                 res.end();
-            } else {
-                convert.format( 'xml', 'Communication', req.body, function( err, converted ) {
-                    if ( err ) {
-                        res.status(500);
-                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
-                        res.end();
-                    } else {
-                        createCommunication( JSON.parse(converted), res, req );
-                    }
-                });
-            }
-        });
+            });
+        } else {
+            res.status(400);
+            res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
+            res.end();
+        }
+
     } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        convert.validate( 'json', JSON.stringify( req.body ), function ( success ) {
-            if ( !success ) {
-                res.status(400);
-                res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
-                res.end();
-            } else {
-                createCommunication( req.body, res, req );
-            }
-        });
+
+        var result = fhir.ValidateJSResource( req.body );
+        if ( result.valid ) {
+            createCommunication( req.body, res, req );
+        } else {
+            res.status(400);
+            res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
+            res.end();
+        }
+
     } else {
         res.status(400);
         res.json( errorOutcome( ERR_CONTENT_TYPE, 'error', "Invalid content type: "+contentType+" ("+origContentType+")" ) );
@@ -248,34 +251,34 @@ app.put("/fhir/Communication/:fhir_id", function( req, res ) {
     var origContentType = ( req.headers['content-type'] ? req.headers['content-type'] : ( req.query._format ? req.query._format : nconf.get("app:default_mime_type") ) );
     var contentType = origContentType.split(';')[0];
     if ( contentType == "application/xml+fhir" || contentType == "application/xml" ) {
-        convert.validate( 'xml', req.body, function ( success ) {
-            if ( !success ) {
-                res.status(400);
-                res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
-                res.end();
-            } else {
 
-                convert.format( 'xml', 'Communication', req.body, function( err, converted ) {
-                    if ( err ) {
-                        res.status(500);
-                        res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
-                        res.end();
-                    } else {
-                        updateCommunication( req.params.fhir_id, JSON.parse(converted), res, req );
-                    }
-                });
-            }
-        });
-    } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
-        convert.validate( 'json', JSON.stringify( req.body ), function( success ) {
-            if ( !success ) {
-                res.status(400);
-                res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
+
+        var result = fhir.ValidateXMLResource(req.body);
+        if ( result.valid ) {
+            fhir.XmlToObject( req.body.toString('utf8') ).then( function(result) {
+                updateCommunication( req.params.fhir_id, result, res, req );
+            }).catch( function(err) {
+                res.status(500);
+                res.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
                 res.end();
-            } else {
-                updateCommunication( req.params.fhir_id, req.body, res, req );
-            }
-        });
+            });
+        } else {
+            res.status(400);
+            res.json( errorOutcome( ERR_VALIDATE_XML, 'error', "Invalid XML FHIR resource." ) );
+            res.end();
+        }
+
+    } else if ( contentType == "application/json+fhir" || contentType == "application/json" ) { 
+
+        var result = fhir.ValidateJSResource( req.body );
+        if ( result.valid ) {
+            updateCommunication( req.params.fhir_id, req.body, res, req );
+        } else {
+            res.status(400);
+            res.json( errorOutcome( ERR_VALIDATE_JSON, 'error', "Invalid JSON FHIR resource." ) );
+            res.end();
+        }
+
     } else {
         res.status(400);
         res.json( errorOutcome( ERR_CONTENT_TYPE, 'error', "Invalid content type: "+contentType+" ("+origContentType+")" ) );
@@ -600,17 +603,18 @@ function searchCommunication( query, post, request, response ) {
                 }
                 response.status(200);
                 if ( ( !request.accepts('json') && request.accepts('xml') ) || ( request.query._format && ( request.query._format == "application/xml+fhir" || request.query._format == "application/xml" ) ) ) {
-                    convert.format( 'json', 'Bundle', JSON.stringify(bundle), function( err, converted ) {
-                        if ( err ) {
-                            response.status(500);
-                            response.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
-                        } else {
-                            response.status(200);
-                            response.type("application/xml+fhir");
-                            response.send( converted );
-                        }
-                        response.end();
-                    });
+
+                    try {
+                        var converted = fhir.ObjectToXml( bundle );
+                        response.status(200);
+                        response.type("application/xml+fhir");
+                        response.send( converted );
+                    } catch( err ) {
+                        response.status(500);
+                        response.json( errorOutcome( ERR_CONVERT_XML, 'error', err ) );
+                    }
+                    response.end();
+
                 } else {
                     response.type("application/json+fhir");
                     response.json(bundle);
